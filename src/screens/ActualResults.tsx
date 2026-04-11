@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useApp } from '../contexts/AppContext';
 import { Transaction, TransactionType } from '../types';
+import MoneyForwardImport from '../components/MoneyForwardImport';
 
 const EXPENSE_CATEGORIES = ['毎月固定費', '毎月変動費', '不定期固定費', '不定期変動費'];
 const INCOME_CATEGORIES = ['予算内', '予算外'];
@@ -46,6 +47,7 @@ export default function ActualResults() {
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
   const [showModal, setShowModal] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState<FormState>(defaultForm);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -259,16 +261,27 @@ export default function ActualResults() {
         </div>
       </div>
 
-      {/* Add button */}
-      <button
-        onClick={openAdd}
-        className="w-full bg-indigo-600 text-white py-3 rounded-xl font-medium hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-        </svg>
-        取引を追加
-      </button>
+      {/* Add / Import buttons */}
+      <div className="flex gap-2">
+        <button
+          onClick={openAdd}
+          className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-medium hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          取引を追加
+        </button>
+        <button
+          onClick={() => setShowImport(true)}
+          className="flex-1 bg-white border border-indigo-300 text-indigo-600 py-3 rounded-xl font-medium hover:bg-indigo-50 transition-colors flex items-center justify-center gap-2"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+          </svg>
+          MF取込
+        </button>
+      </div>
 
       {/* Transaction list */}
       {Object.entries(grouped).map(([type, items]) => (
@@ -484,6 +497,11 @@ export default function ActualResults() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* MoneyForward Import Modal */}
+      {showImport && (
+        <MoneyForwardImport onClose={() => setShowImport(false)} />
       )}
     </div>
   );
