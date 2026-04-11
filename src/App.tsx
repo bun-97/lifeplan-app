@@ -2,6 +2,7 @@ import React from 'react';
 import { AppProvider, useApp } from './contexts/AppContext';
 import Navigation from './components/Navigation';
 import ProfileSelector from './components/ProfileSelector';
+import DataSync from './components/DataSync';
 import ActualResults from './screens/ActualResults';
 import BudgetPlan from './screens/BudgetPlan';
 import AnnualBudget from './screens/AnnualBudget';
@@ -10,6 +11,7 @@ import LifePlan from './screens/LifePlan';
 function AppContent() {
   const { currentProfile, currentScreen, createProfile } = useApp();
   const [setupName, setSetupName] = React.useState('');
+  const [showSync, setShowSync] = React.useState(false);
 
   if (!currentProfile) {
     return (
@@ -42,8 +44,21 @@ function AppContent() {
             >
               始める
             </button>
+            {/* 既存データのインポート */}
+            <button
+              onClick={() => setShowSync(true)}
+              className="w-full text-sm text-indigo-600 hover:text-indigo-700 py-2"
+            >
+              📥 既存データを読み込む（他の端末からの移行）
+            </button>
           </div>
         </div>
+        {showSync && (
+          <DataSync
+            onClose={() => setShowSync(false)}
+            onImported={() => window.location.reload()}
+          />
+        )}
       </div>
     );
   }
@@ -60,7 +75,19 @@ function AppContent() {
             {currentScreen === 'annual-budget' && '年間予算'}
             {currentScreen === 'life-plan' && 'ライフプランシート'}
           </h1>
-          <ProfileSelector />
+          <div className="flex items-center gap-2">
+            {/* データ同期ボタン */}
+            <button
+              onClick={() => setShowSync(true)}
+              className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+              title="データの移行・バックアップ"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 7.5h-.75A2.25 2.25 0 004.5 9.75v7.5a2.25 2.25 0 002.25 2.25h7.5a2.25 2.25 0 002.25-2.25v-7.5a2.25 2.25 0 00-2.25-2.25h-.75m-6 3.75l3 3m0 0l3-3m-3 3V1.5m6 9h.75a2.25 2.25 0 012.25 2.25v7.5a2.25 2.25 0 01-2.25 2.25h-7.5a2.25 2.25 0 01-2.25-2.25v-.75" />
+              </svg>
+            </button>
+            <ProfileSelector />
+          </div>
         </div>
       </header>
 
@@ -73,6 +100,13 @@ function AppContent() {
         {currentScreen === 'annual-budget' && <AnnualBudget />}
         {currentScreen === 'life-plan' && <LifePlan />}
       </main>
+
+      {showSync && (
+        <DataSync
+          onClose={() => setShowSync(false)}
+          onImported={() => window.location.reload()}
+        />
+      )}
     </div>
   );
 }
