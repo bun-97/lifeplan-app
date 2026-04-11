@@ -3,6 +3,7 @@ import { AppProvider, useApp } from './contexts/AppContext';
 import Navigation from './components/Navigation';
 import ProfileSelector from './components/ProfileSelector';
 import DataSync from './components/DataSync';
+import Home from './screens/Home';
 import ActualResults from './screens/ActualResults';
 import BudgetPlan from './screens/BudgetPlan';
 import AnnualBudget from './screens/AnnualBudget';
@@ -70,6 +71,7 @@ function AppContent() {
         <div className="flex items-center justify-between px-4 h-14">
           <h1 className="text-base font-bold text-gray-800 md:hidden">ライフプラン家計管理</h1>
           <h1 className="text-base font-bold text-gray-800 hidden md:block">
+            {currentScreen === 'home' && 'ホーム'}
             {currentScreen === 'actual' && '実績管理'}
             {currentScreen === 'budget-plan' && '予算計画'}
             {currentScreen === 'annual-budget' && '年間予算'}
@@ -95,6 +97,7 @@ function AppContent() {
 
       {/* Main content */}
       <main className="pt-14 pb-20 md:pb-0 md:ml-56 min-h-screen">
+        {currentScreen === 'home' && <Home />}
         {currentScreen === 'actual' && <ActualResults />}
         {currentScreen === 'budget-plan' && <BudgetPlan />}
         {currentScreen === 'annual-budget' && <AnnualBudget />}

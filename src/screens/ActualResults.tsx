@@ -96,6 +96,7 @@ export default function ActualResults() {
     [monthlyTx]
   );
   const balance = totalIncome - totalExpense - totalInvestment;
+  const expenseRate = totalIncome > 0 ? Math.round(totalExpense / totalIncome * 100) : 0;
 
   // Annual data for summary
   const annualTx = useMemo(
@@ -285,6 +286,30 @@ export default function ActualResults() {
           </p>
         </div>
       </div>
+
+      {/* Expense rate bar */}
+      {totalIncome > 0 && (
+        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-gray-700">今月の支出率</span>
+            <span className={`text-lg font-bold ${expenseRate > 80 ? 'text-red-500' : 'text-emerald-600'}`}>
+              {expenseRate}%
+            </span>
+          </div>
+          <div className="w-full bg-gray-100 rounded-full h-3">
+            <div
+              className={`h-3 rounded-full transition-all ${expenseRate > 80 ? 'bg-red-400' : expenseRate > 60 ? 'bg-amber-400' : 'bg-emerald-400'}`}
+              style={{ width: `${Math.min(expenseRate, 100)}%` }}
+            />
+          </div>
+          <div className="flex justify-between text-xs text-gray-400 mt-1">
+            <span>0%</span>
+            <span className="text-amber-500">60%</span>
+            <span className="text-red-500">80%</span>
+            <span>100%</span>
+          </div>
+        </div>
+      )}
 
       {/* Add / Import buttons */}
       <div className="flex gap-2">

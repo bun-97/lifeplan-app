@@ -31,7 +31,7 @@ const AppContext = createContext<AppContextType | null>(null);
 export function AppProvider({ children }: { children: ReactNode }) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [currentProfile, setCurrentProfileState] = useState<Profile | null>(null);
-  const [currentScreen, setCurrentScreen] = useState<Screen>('actual');
+  const [currentScreen, setCurrentScreen] = useState<Screen>('home');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [lifeEvents, setLifeEvents] = useState<LifeEvent[]>([]);

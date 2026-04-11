@@ -32,23 +32,26 @@ interface EventForm {
   title: string;
   description: string;
   amount: string;
+  memberId: string;
 }
 
 const defaultEventForm: EventForm = {
   year: new Date().getFullYear(),
   title: '',
   description: '',
-  amount: ''
+  amount: '',
+  memberId: ''
 };
 
 export default function LifePlan() {
-  const { currentProfile, updateProfile, lifeEvents, addLifeEvent, deleteLifeEvent, transactions, budgets } = useApp();
+  const { currentProfile, updateProfile, lifeEvents, addLifeEvent, updateLifeEvent, deleteLifeEvent, transactions, budgets } = useApp();
   const [activeTab, setActiveTab] = useState<Tab>('family');
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
   const [memberForm, setMemberForm] = useState<MemberForm>(defaultMemberForm);
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [eventForm, setEventForm] = useState<EventForm>(defaultEventForm);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
 
   const members = currentProfile?.members || [];
 
@@ -84,15 +87,34 @@ export default function LifePlan() {
 
   function handleAddEvent() {
     if (!eventForm.title.trim() || !currentProfile) return;
-    addLifeEvent({
+    const eventData = {
       profileId: currentProfile.id,
       year: eventForm.year,
       title: eventForm.title.trim(),
       description: eventForm.description.trim() || undefined,
-      amount: eventForm.amount ? Number(eventForm.amount) : undefined
-    });
+      amount: eventForm.amount ? Number(eventForm.amount) : undefined,
+      memberId: eventForm.memberId || undefined
+    };
+    if (editingEventId) {
+      updateLifeEvent({ ...eventData, id: editingEventId });
+    } else {
+      addLifeEvent(eventData);
+    }
     setShowEventModal(false);
     setEventForm(defaultEventForm);
+    setEditingEventId(null);
+  }
+
+  function openEditEvent(event: LifeEvent) {
+    setEventForm({
+      year: event.year,
+      title: event.title,
+      description: event.description || '',
+      amount: event.amount ? String(event.amount) : '',
+      memberId: event.memberId || ''
+    });
+    setEditingEventId(event.id);
+    setShowEventModal(true);
   }
 
   // Cash flow per year (from budgets + actuals)
@@ -228,7 +250,7 @@ export default function LifePlan() {
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold text-gray-700">ライフイベント</h2>
               <button
-                onClick={() => { setEventForm(defaultEventForm); setShowEventModal(true); }}
+                onClick={() => { setEventForm(defaultEventForm); setEditingEventId(null); setShowEventModal(true); }}
                 className="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors flex items-center gap-1"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
@@ -243,28 +265,44 @@ export default function LifePlan() {
               </div>
             ) : (
               <div className="space-y-2">
-                {lifeEvents.sort((a, b) => a.year - b.year).map(event => (
-                  <div key={event.id} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">{event.year}年</span>
-                        <span className="text-sm font-semibold text-gray-800">{event.title}</span>
+                {lifeEvents.sort((a, b) => a.year - b.year).map(event => {
+                  const memberName = event.memberId
+                    ? members.find(m => m.id === event.memberId)?.name || '全員'
+                    : '全員';
+                  return (
+                    <div key={event.id} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">{event.year}年</span>
+                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{memberName}</span>
+                          <span className="text-sm font-semibold text-gray-800">{event.title}</span>
+                        </div>
+                        {event.description && <p className="text-xs text-gray-500 mt-1">{event.description}</p>}
+                        {event.amount && (
+                          <p className="text-xs text-indigo-600 mt-0.5 font-medium">予算: {event.amount.toLocaleString()}円</p>
+                        )}
                       </div>
-                      {event.description && <p className="text-xs text-gray-500 mt-1">{event.description}</p>}
-                      {event.amount && (
-                        <p className="text-xs text-indigo-600 mt-0.5 font-medium">予算: {event.amount.toLocaleString()}円</p>
-                      )}
+                      <div className="flex items-center gap-1 ml-2 shrink-0">
+                        <button
+                          onClick={() => openEditEvent(event)}
+                          className="text-gray-400 hover:text-indigo-500 p-1"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => deleteLifeEvent(event.id)}
+                          className="text-gray-400 hover:text-red-500 p-1"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                          </svg>
+                        </button>
+                      </div>
                     </div>
-                    <button
-                      onClick={() => deleteLifeEvent(event.id)}
-                      className="text-gray-300 hover:text-red-400 p-1 ml-2"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -277,7 +315,7 @@ export default function LifePlan() {
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-gray-700">ライフプランシート (2025〜2060)</h2>
             <button
-              onClick={() => { setEventForm(defaultEventForm); setShowEventModal(true); }}
+              onClick={() => { setEventForm(defaultEventForm); setEditingEventId(null); setShowEventModal(true); }}
               className="text-xs bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg font-medium hover:bg-purple-200 transition-colors"
             >
               + イベント追加
@@ -499,8 +537,10 @@ export default function LifePlan() {
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
           <div className="bg-white w-full md:max-w-md rounded-t-2xl md:rounded-2xl">
             <div className="flex items-center justify-between p-4 border-b border-gray-100">
-              <h2 className="text-base font-semibold text-gray-800">ライフイベントを追加</h2>
-              <button onClick={() => setShowEventModal(false)} className="text-gray-400 hover:text-gray-600">
+              <h2 className="text-base font-semibold text-gray-800">
+                {editingEventId ? 'ライフイベントを編集' : 'ライフイベントを追加'}
+              </h2>
+              <button onClick={() => { setShowEventModal(false); setEditingEventId(null); }} className="text-gray-400 hover:text-gray-600">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -515,6 +555,19 @@ export default function LifePlan() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
                   {PLAN_YEARS.map(y => <option key={y} value={y}>{y}年</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">対象メンバー</label>
+                <select
+                  value={eventForm.memberId}
+                  onChange={e => setEventForm(f => ({ ...f, memberId: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  <option value="">全員</option>
+                  {members.map(m => (
+                    <option key={m.id} value={m.id}>{m.name}</option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -553,7 +606,7 @@ export default function LifePlan() {
                 disabled={!eventForm.title.trim()}
                 className="w-full bg-purple-600 text-white py-3 rounded-xl font-medium hover:bg-purple-700 transition-colors disabled:opacity-50"
               >
-                追加する
+                {editingEventId ? '更新する' : '追加する'}
               </button>
             </div>
           </div>
