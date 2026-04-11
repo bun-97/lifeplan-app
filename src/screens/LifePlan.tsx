@@ -396,7 +396,7 @@ export default function LifePlan() {
                     <p className="text-gray-400 text-[10px]">予算/実績</p>
                   </td>
                   {cashFlowWithCumulative.map(row => (
-                    <td key={row.year} className="px-2 py-2 text-center text-emerald-600 font-medium">
+                    <td key={row.year} className="px-2 py-2 text-center text-blue-600 font-medium">
                       {formatAmount(row.income)}
                     </td>
                   ))}
@@ -432,7 +432,7 @@ export default function LifePlan() {
                     <p className="font-bold text-gray-700">収支バランス</p>
                   </td>
                   {cashFlowWithCumulative.map(row => (
-                    <td key={row.year} className={`px-2 py-2 text-center font-bold ${row.balance >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    <td key={row.year} className={`px-2 py-2 text-center font-bold ${row.balance >= 0 ? 'text-gray-800' : 'text-red-500'}`}>
                       {row.balance !== 0 ? (row.balance >= 0 ? '+' : '') + formatAmount(row.balance) : '-'}
                     </td>
                   ))}
@@ -445,7 +445,7 @@ export default function LifePlan() {
                     <p className="text-indigo-400 text-[10px]">（繰越）</p>
                   </td>
                   {cashFlowWithCumulative.map(row => (
-                    <td key={row.year} className={`px-2 py-2.5 text-center font-bold text-sm ${row.cumulative >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    <td key={row.year} className={`px-2 py-2.5 text-center font-bold text-sm ${row.cumulative >= 0 ? 'text-gray-800' : 'text-red-600'}`}>
                       {row.cumulative !== 0 ? (row.cumulative >= 0 ? '+' : '') + formatAmount(row.cumulative) : '-'}
                     </td>
                   ))}

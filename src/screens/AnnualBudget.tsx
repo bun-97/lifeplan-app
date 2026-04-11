@@ -28,7 +28,7 @@ const typeLabel: Record<TransactionType, string> = {
 };
 
 const typeTextColor: Record<TransactionType, string> = {
-  income: 'text-emerald-600',
+  income: 'text-blue-600',
   expense: 'text-red-500',
   investment: 'text-blue-500'
 };
@@ -185,7 +185,7 @@ export default function AnnualBudget() {
             <p className="text-xs text-gray-500">年間収支（予算）</p>
             {(() => {
               const net = annualBudget.income - annualBudget.expense - annualBudget.investment;
-              return <p className={`text-base font-bold ${net >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+              return <p className={`text-base font-bold ${net >= 0 ? 'text-gray-800' : 'text-red-500'}`}>
                 {net >= 0 ? '+' : ''}{formatFull(net)}
               </p>;
             })()}
@@ -194,7 +194,7 @@ export default function AnnualBudget() {
             <p className="text-xs text-gray-500">年間収支（実績）</p>
             {(() => {
               const net = annualActual.income - annualActual.expense - annualActual.investment;
-              return <p className={`text-base font-bold ${net >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+              return <p className={`text-base font-bold ${net >= 0 ? 'text-gray-800' : 'text-red-500'}`}>
                 {net >= 0 ? '+' : ''}{formatFull(net)}
               </p>;
             })()}
@@ -255,7 +255,7 @@ export default function AnnualBudget() {
                               .reduce((s, t) => s + t.amount, 0);
                             const isOver = actual > budgetMonthly && budgetMonthly > 0;
                             return (
-                              <td key={m} className={`px-1.5 py-1.5 text-center font-medium ${actual > 0 ? (isOver ? 'text-red-500' : 'text-emerald-600') : 'text-gray-300'}`}>
+                              <td key={m} className={`px-1.5 py-1.5 text-center font-medium ${actual > 0 ? (isOver ? 'text-red-500' : 'text-blue-600') : 'text-gray-300'}`}>
                                 {actual > 0 ? formatAmount(actual) : '-'}
                               </td>
                             );
@@ -281,7 +281,7 @@ export default function AnnualBudget() {
                             const diff = budgetMonthly - actual;
                             if (budgetMonthly === 0) return <td key={m} className="px-1.5 py-1 text-center text-gray-300">-</td>;
                             return (
-                              <td key={m} className={`px-1.5 py-1 text-center text-[10px] ${diff >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
+                              <td key={m} className={`px-1.5 py-1 text-center text-[10px] ${diff >= 0 ? 'text-blue-500' : 'text-red-400'}`}>
                                 {diff >= 0 ? '+' : ''}{formatAmount(diff)}
                               </td>
                             );

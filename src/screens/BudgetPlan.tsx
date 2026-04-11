@@ -48,7 +48,7 @@ const typeLabel: Record<TransactionType, string> = {
 };
 
 const typeColor: Record<TransactionType, string> = {
-  income: 'text-emerald-600',
+  income: 'text-blue-600',
   expense: 'text-red-500',
   investment: 'text-blue-500'
 };
@@ -229,7 +229,7 @@ export default function BudgetPlan() {
                   const totals = yearTotals[y];
                   const net = totals.income - totals.expense - totals.investment;
                   return (
-                    <td key={y} className={`px-2 py-2.5 text-center ${net >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    <td key={y} className={`px-2 py-2.5 text-center ${net >= 0 ? 'text-gray-800' : 'text-red-500'}`}>
                       {net >= 0 ? '+' : ''}{formatAmount(net)}
                     </td>
                   );
@@ -238,7 +238,7 @@ export default function BudgetPlan() {
               <tr className="bg-gray-50">
                 <td className="px-3 py-2 sticky left-0 bg-gray-50 z-10 text-gray-500">　うち収入</td>
                 {visibleYears.map(y => (
-                  <td key={y} className="px-2 py-2 text-center text-emerald-600">
+                  <td key={y} className="px-2 py-2 text-center text-blue-600">
                     {formatAmount(yearTotals[y].income)}
                   </td>
                 ))}

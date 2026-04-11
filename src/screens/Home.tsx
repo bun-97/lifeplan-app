@@ -61,7 +61,7 @@ export default function Home() {
         {avgRate === null ? (
           <p className="text-3xl font-bold text-gray-300 mt-1">データなし</p>
         ) : (
-          <p className={`text-5xl font-bold mt-1 ${avgRate > 80 ? 'text-red-500' : 'text-emerald-600'}`}>
+          <p className={`text-5xl font-bold mt-1 ${avgRate > 80 ? 'text-red-500' : 'text-blue-600'}`}>
             {avgRate}%
           </p>
         )}
@@ -93,7 +93,7 @@ export default function Home() {
                   <div className="w-full bg-gray-100 rounded-full h-2" />
                 )}
               </div>
-              <span className={`text-sm font-bold w-12 text-right ${!hasData ? 'text-gray-300' : rate > 80 ? 'text-red-500' : 'text-emerald-600'}`}>
+              <span className={`text-sm font-bold w-12 text-right ${!hasData ? 'text-gray-300' : rate > 80 ? 'text-red-500' : 'text-blue-600'}`}>
                 {hasData ? `${rate}%` : '-'}
               </span>
             </div>
@@ -110,7 +110,7 @@ export default function Home() {
           <div className="space-y-2">
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">収入予算</span>
-              <span className="text-sm font-semibold text-emerald-600">{annualBudget.income.toLocaleString()}円</span>
+              <span className="text-sm font-semibold text-blue-600">{annualBudget.income.toLocaleString()}円</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600">支出予算</span>

@@ -219,7 +219,7 @@ export default function ActualResults() {
   };
 
   const typeColor: Record<TransactionType, string> = {
-    income: 'text-emerald-600',
+    income: 'text-blue-600',
     expense: 'text-red-500',
     investment: 'text-blue-500'
   };
@@ -269,7 +269,7 @@ export default function ActualResults() {
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
           <p className="text-xs text-gray-500 mb-1">収入合計</p>
-          <p className="text-lg font-bold text-emerald-600">{formatAmount(totalIncome)}</p>
+          <p className="text-lg font-bold text-blue-600">{formatAmount(totalIncome)}</p>
         </div>
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
           <p className="text-xs text-gray-500 mb-1">支出合計</p>
@@ -281,7 +281,7 @@ export default function ActualResults() {
         </div>
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
           <p className="text-xs text-gray-500 mb-1">収支バランス</p>
-          <p className={`text-lg font-bold ${balance >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+          <p className={`text-lg font-bold ${balance >= 0 ? 'text-gray-800' : 'text-red-500'}`}>
             {balance >= 0 ? '+' : ''}{formatAmount(balance)}
           </p>
         </div>
@@ -292,7 +292,7 @@ export default function ActualResults() {
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-gray-700">今月の支出率</span>
-            <span className={`text-lg font-bold ${expenseRate > 80 ? 'text-red-500' : 'text-emerald-600'}`}>
+            <span className={`text-lg font-bold ${expenseRate > 80 ? 'text-red-500' : 'text-blue-600'}`}>
               {expenseRate}%
             </span>
           </div>
@@ -420,7 +420,7 @@ export default function ActualResults() {
         <div className="grid grid-cols-2 gap-3">
           <div>
             <p className="text-xs text-gray-500">月平均収入</p>
-            <p className="text-sm font-semibold text-emerald-600">{formatAmount(avgMonthlyIncome)}</p>
+            <p className="text-sm font-semibold text-blue-600">{formatAmount(avgMonthlyIncome)}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500">月平均支出</p>
@@ -428,7 +428,7 @@ export default function ActualResults() {
           </div>
           <div>
             <p className="text-xs text-gray-500">年間収入合計</p>
-            <p className="text-sm font-semibold text-emerald-600">{formatAmount(annualIncome)}</p>
+            <p className="text-sm font-semibold text-blue-600">{formatAmount(annualIncome)}</p>
           </div>
           <div>
             <p className="text-xs text-gray-500">年間支出合計</p>
