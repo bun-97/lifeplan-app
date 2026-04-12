@@ -4,10 +4,8 @@ import { useApp } from '../contexts/AppContext';
 import { Transaction, TransactionType } from '../types';
 import MoneyForwardImport from '../components/MoneyForwardImport';
 import { saveCategoryRule } from '../lib/categoryRules';
-
-const EXPENSE_CATEGORIES = ['毎月固定費', '毎月変動費', '不定期固定費', '不定期変動費'];
-const INCOME_CATEGORIES = ['予算内', '予算外'];
-const INVESTMENT_CATEGORIES = ['積立投資', '定期預金', 'その他'];
+import { getMajorCategories, getMinorCategories } from '../lib/categoryConfig';
+import CategorySettings from '../components/CategorySettings';
 
 const MF_CATEGORY_COLORS: Record<string, string> = {
   '食費': '#E94B3C', '外食': '#E94B3C', '食料品': '#E94B3C',
@@ -32,27 +30,19 @@ function fmtShort(n: number): string {
   return n.toLocaleString('ja-JP') + '円';
 }
 
-function getCategoriesForType(type: TransactionType): string[] {
-  if (type === 'income') return INCOME_CATEGORIES;
-  if (type === 'expense') return EXPENSE_CATEGORIES;
-  return INVESTMENT_CATEGORIES;
-}
-
 interface FormState {
   type: TransactionType;
-  category: string;
   subcategory: string;
   itemName: string;
   amount: string;
   note: string;
 }
-const defaultForm: FormState = { type: 'expense', category: '毎月固定費', subcategory: '', itemName: '', amount: '', note: '' };
+const defaultForm: FormState = { type: 'expense', subcategory: '', itemName: '', amount: '', note: '' };
 
 // Category change modal state
 interface ReclassifyState {
   tx: Transaction;
   type: TransactionType;
-  category: string;
   subcategory: string;
 }
 
@@ -63,7 +53,9 @@ export default function ActualResults() {
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
   const [showModal, setShowModal] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showCategorySettings, setShowCategorySettings] = useState(false);
   const [form, setForm] = useState<FormState>(defaultForm);
+  const [minorCategory, setMinorCategory] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [reclassify, setReclassify] = useState<ReclassifyState | null>(null);
@@ -83,13 +75,13 @@ export default function ActualResults() {
   // Pie data
   const expensePieData = useMemo(() => {
     const map: Record<string, number> = {};
-    monthlyTx.filter(t => t.type === 'expense').forEach(t => { const k = t.subcategory || t.category; map[k] = (map[k] || 0) + t.amount; });
+    monthlyTx.filter(t => t.type === 'expense').forEach(t => { const k = t.subcategory || t.itemName; map[k] = (map[k] || 0) + t.amount; });
     return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [monthlyTx]);
 
   const incomePieData = useMemo(() => {
     const map: Record<string, number> = {};
-    monthlyTx.filter(t => t.type === 'income').forEach(t => { const k = t.subcategory || t.category; map[k] = (map[k] || 0) + t.amount; });
+    monthlyTx.filter(t => t.type === 'income').forEach(t => { const k = t.subcategory || t.itemName; map[k] = (map[k] || 0) + t.amount; });
     return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [monthlyTx]);
 
@@ -113,7 +105,7 @@ export default function ActualResults() {
     else setSelectedMonth(m => m + 1);
   }
 
-  function openAdd() { setForm(defaultForm); setEditingId(null); setShowModal(true); }
+  function openAdd() { setForm(defaultForm); setMinorCategory(''); setEditingId(null); setShowModal(true); }
 
   function handleSubmit() {
     if (!form.subcategory.trim() || !form.itemName.trim() || !form.amount) return;
@@ -121,27 +113,27 @@ export default function ActualResults() {
     if (isNaN(amount) || amount <= 0) return;
     if (editingId) {
       const existing = transactions.find(t => t.id === editingId);
-      if (existing) updateTransaction({ ...existing, type: form.type, category: form.category, subcategory: form.subcategory, itemName: form.itemName, amount, note: form.note || undefined });
+      if (existing) updateTransaction({ ...existing, type: form.type, category: form.subcategory, subcategory: form.subcategory, minorCategory: minorCategory || undefined, itemName: form.itemName, amount, note: form.note || undefined });
     } else {
       if (!currentProfile) return;
-      addTransaction({ profileId: currentProfile.id, year: selectedYear, month: selectedMonth, type: form.type, category: form.category, subcategory: form.subcategory, itemName: form.itemName, amount, note: form.note || undefined });
+      addTransaction({ profileId: currentProfile.id, year: selectedYear, month: selectedMonth, type: form.type, category: form.subcategory, subcategory: form.subcategory, minorCategory: minorCategory || undefined, itemName: form.itemName, amount, note: form.note || undefined });
     }
-    setShowModal(false); setForm(defaultForm); setEditingId(null);
+    setShowModal(false); setForm(defaultForm); setMinorCategory(''); setEditingId(null);
   }
 
   function openReclassify(tx: Transaction) {
-    setReclassify({ tx, type: tx.type, category: tx.category, subcategory: tx.subcategory });
+    setReclassify({ tx, type: tx.type, subcategory: tx.subcategory });
     setApplyToAll(false);
   }
 
   function handleReclassify() {
     if (!reclassify) return;
-    const { tx, type, category, subcategory } = reclassify;
-    const update = (t: Transaction) => updateTransaction({ ...t, type, category, subcategory });
+    const { tx, type, subcategory } = reclassify;
+    const update = (t: Transaction) => updateTransaction({ ...t, type, category: subcategory, subcategory });
     update(tx);
     if (applyToAll) {
       transactions.filter(t => t.itemName === tx.itemName && t.id !== tx.id).forEach(update);
-      saveCategoryRule(tx.itemName, { type, category, subcategory });
+      saveCategoryRule(tx.itemName, { type, category: subcategory, subcategory });
     }
     setReclassify(null);
   }
@@ -151,22 +143,23 @@ export default function ActualResults() {
   if (!currentProfile) return <div className="flex items-center justify-center h-64"><p className="text-gray-500">プロファイルを作成してください</p></div>;
 
   return (
-    <div className="w-full">
+    <div className="w-full relative">
+
+      {/* Settings gear button */}
+      <button onClick={() => setShowCategorySettings(true)} className="absolute right-3 top-3 text-gray-400 text-lg z-10">⚙</button>
 
       {/* ===== TOP HEADER SECTION ===== */}
       <div className="bg-white border-b border-gray-100 px-4 pt-4 pb-4">
-        {/* Month navigation */}
-        <div className="flex items-center justify-center gap-4 mb-3">
-          <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-            </svg>
+        {/* Month navigation - card style */}
+        <div className="flex items-center mb-3">
+          <button onClick={prevMonth} className="text-2xl py-4 px-4 text-gray-400 hover:text-gray-600">
+            &lt;
           </button>
-          <span className="text-base font-bold text-gray-800">{selectedYear}年{selectedMonth}月</span>
-          <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-            </svg>
+          <div className="flex-1 text-center font-semibold text-lg text-gray-800">
+            {selectedYear}年{selectedMonth}月
+          </div>
+          <button onClick={nextMonth} className="text-2xl py-4 px-4 text-gray-400 hover:text-gray-600">
+            &gt;
           </button>
         </div>
 
@@ -226,7 +219,7 @@ export default function ActualResults() {
                       const color = getCategoryColor(item.name, i);
                       const key = `income-${item.name}`;
                       const expanded = expandedGroups.has(key);
-                      const txItems = monthlyTx.filter(t => t.type === 'income' && (t.subcategory || t.category) === item.name).sort((a, b) => (b.day || 0) - (a.day || 0));
+                      const txItems = monthlyTx.filter(t => t.type === 'income' && (t.subcategory || t.itemName) === item.name).sort((a, b) => (b.day || 0) - (a.day || 0));
                       return (
                         <div key={item.name}>
                           <button onClick={() => toggleGroup(key)} className="w-full flex items-center px-2 py-1.5 gap-1.5 hover:bg-gray-50 transition-colors">
@@ -288,7 +281,7 @@ export default function ActualResults() {
                       const color = getCategoryColor(item.name, i);
                       const key = `expense-${item.name}`;
                       const expanded = expandedGroups.has(key);
-                      const txItems = monthlyTx.filter(t => t.type === 'expense' && (t.subcategory || t.category) === item.name).sort((a, b) => (b.day || 0) - (a.day || 0));
+                      const txItems = monthlyTx.filter(t => t.type === 'expense' && (t.subcategory || t.itemName) === item.name).sort((a, b) => (b.day || 0) - (a.day || 0));
                       return (
                         <div key={item.name}>
                           <button onClick={() => toggleGroup(key)} className="w-full flex items-center px-2 py-1.5 gap-1.5 hover:bg-gray-50 transition-colors">
@@ -360,7 +353,7 @@ export default function ActualResults() {
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">種別</label>
                 <div className="flex gap-2">
                   {(['income', 'expense', 'investment'] as TransactionType[]).map(t => (
-                    <button key={t} onClick={() => { const cats = getCategoriesForType(t); setForm(f => ({ ...f, type: t, category: cats[0] })); }}
+                    <button key={t} onClick={() => { setForm(f => ({ ...f, type: t, subcategory: '' })); setMinorCategory(''); }}
                       className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${form.type === t ? (t === 'income' ? 'bg-blue-500 text-white border-blue-500' : t === 'expense' ? 'bg-red-500 text-white border-red-500' : 'bg-gray-600 text-white border-gray-600') : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
                       {typeLabel[t]}
                     </button>
@@ -368,15 +361,33 @@ export default function ActualResults() {
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">カテゴリ</label>
-                <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                  {getCategoriesForType(form.type).map(c => <option key={c} value={c}>{c}</option>)}
+                <label className="text-xs text-gray-500 mb-1 block">大分類</label>
+                <select
+                  value={form.subcategory}
+                  onChange={e => { setForm(f => ({ ...f, subcategory: e.target.value })); setMinorCategory(''); }}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white"
+                >
+                  <option value="">選択してください</option>
+                  {getMajorCategories(form.type).map(node => (
+                    <option key={node.id} value={node.name}>{node.name}</option>
+                  ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">サブカテゴリ（例：食費、家賃）</label>
-                <input type="text" value={form.subcategory} onChange={e => setForm(f => ({ ...f, subcategory: e.target.value }))} placeholder="食費、家賃、交通費など" className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-              </div>
+              {getMinorCategories(form.type, form.subcategory).length > 0 && (
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">中分類</label>
+                  <select
+                    value={minorCategory}
+                    onChange={e => setMinorCategory(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white"
+                  >
+                    <option value="">選択してください</option>
+                    {getMinorCategories(form.type, form.subcategory).map(sub => (
+                      <option key={sub} value={sub}>{sub}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">店名・品目名</label>
                 <input type="text" value={form.itemName} onChange={e => setForm(f => ({ ...f, itemName: e.target.value }))} placeholder="スーパー、家賃支払いなど" className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
@@ -416,7 +427,7 @@ export default function ActualResults() {
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">種別</label>
                 <div className="flex gap-2">
                   {(['income', 'expense', 'investment'] as TransactionType[]).map(t => (
-                    <button key={t} onClick={() => { const cats = getCategoriesForType(t); setReclassify(r => r ? { ...r, type: t, category: cats[0] } : r); }}
+                    <button key={t} onClick={() => setReclassify(r => r ? { ...r, type: t, subcategory: '' } : r)}
                       className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${reclassify.type === t ? (t === 'income' ? 'bg-blue-500 text-white border-blue-500' : t === 'expense' ? 'bg-red-500 text-white border-red-500' : 'bg-gray-600 text-white border-gray-600') : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
                       {typeLabel[t]}
                     </button>
@@ -424,14 +435,17 @@ export default function ActualResults() {
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">カテゴリ</label>
-                <select value={reclassify.category} onChange={e => setReclassify(r => r ? { ...r, category: e.target.value } : r)} className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                  {getCategoriesForType(reclassify.type).map(c => <option key={c} value={c}>{c}</option>)}
+                <label className="text-xs text-gray-500 mb-1 block">大分類</label>
+                <select
+                  value={reclassify.subcategory}
+                  onChange={e => setReclassify(r => r ? { ...r, subcategory: e.target.value } : r)}
+                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white"
+                >
+                  <option value="">選択してください</option>
+                  {getMajorCategories(reclassify.type).map(node => (
+                    <option key={node.id} value={node.name}>{node.name}</option>
+                  ))}
                 </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">サブカテゴリ</label>
-                <input type="text" value={reclassify.subcategory} onChange={e => setReclassify(r => r ? { ...r, subcategory: e.target.value } : r)} className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
               <label className="flex items-center gap-3 cursor-pointer">
                 <input type="checkbox" checked={applyToAll} onChange={e => setApplyToAll(e.target.checked)} className="rounded text-indigo-600 w-4 h-4" />
@@ -449,6 +463,7 @@ export default function ActualResults() {
       )}
 
       {showImport && <MoneyForwardImport onClose={() => setShowImport(false)} />}
+      {showCategorySettings && <CategorySettings onClose={() => setShowCategorySettings(false)} />}
     </div>
   );
 }

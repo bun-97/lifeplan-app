@@ -6,6 +6,11 @@ function fmt(n: number): string {
   return n.toLocaleString('ja-JP') + '円';
 }
 
+const FIXED_MONTHLY_CATS = ['住宅', '通信費', '保険', 'サブスク費', '水道光熱費', '自動車'];
+const VAR_MONTHLY_CATS = ['食費', '日用品', '交際費', '衣服・美容', '健康・医療', '教養・教育'];
+const FIXED_IRREG_CATS = ['税・社会保障'];
+const VAR_IRREG_CATS = ['その他', '臨時支出'];
+
 export default function Home() {
   const { currentProfile, transactions } = useApp();
   const now = new Date();
@@ -50,6 +55,35 @@ export default function Home() {
   const annualIncome = thisYearTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const annualExpense = thisYearTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
 
+  // Monthly expense summary based on 大分類 mapping
+  const expenseSummary = useMemo(() => {
+    const n = monthsWithData.length || 1;
+    const allExpense = transactions.filter(t => t.type === 'expense');
+
+    function sumByCats(cats: string[]) {
+      return allExpense
+        .filter(t => cats.includes(t.subcategory))
+        .reduce((s, t) => s + t.amount, 0);
+    }
+
+    return {
+      fixedMonthly: Math.round(sumByCats(FIXED_MONTHLY_CATS) / n),
+      varMonthly: Math.round(sumByCats(VAR_MONTHLY_CATS) / n),
+      fixedIrreg: Math.round(sumByCats(FIXED_IRREG_CATS) / n),
+      varIrreg: Math.round(sumByCats(VAR_IRREG_CATS) / n),
+    };
+  }, [transactions, monthsWithData.length]);
+
+  // Current month totals for summary bar
+  const currentMonthTx = useMemo(
+    () => transactions.filter(t => t.year === currentYear && t.month === currentMonth),
+    [transactions, currentYear, currentMonth]
+  );
+  const currentIncome = currentMonthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const currentExpense = currentMonthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const currentInvestment = currentMonthTx.filter(t => t.type === 'investment').reduce((s, t) => s + t.amount, 0);
+  const currentExpenseRate = currentIncome > 0 ? Math.round(currentExpense / currentIncome * 100) : 0;
+
   if (!currentProfile) {
     return <div className="flex items-center justify-center h-64"><p className="text-gray-500">プロファイルを作成してください</p></div>;
   }
@@ -90,6 +124,62 @@ export default function Home() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
           <p className="text-xs text-gray-400 mb-1">{currentYear}年 年間支出合計</p>
           <p className="text-xl font-bold text-red-500">{fmt(annualExpense)}</p>
+        </div>
+      </div>
+
+      {/* ===== 月間支出サマリー ===== */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100">
+          <p className="text-sm font-semibold text-gray-800">月間支出サマリー</p>
+          <p className="text-xs text-gray-400 mt-0.5">全期間データの月平均</p>
+        </div>
+        <table className="w-full">
+          <thead>
+            <tr className="bg-gray-50">
+              <th className="text-left text-xs text-gray-500 font-medium px-4 py-2">カテゴリ</th>
+              <th className="text-right text-xs text-gray-500 font-medium px-4 py-2">月平均</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            <tr>
+              <td className="px-4 py-3 text-sm text-gray-700">毎月固定費</td>
+              <td className="px-4 py-3 text-sm font-semibold text-red-500 text-right">{fmt(expenseSummary.fixedMonthly)}</td>
+            </tr>
+            <tr>
+              <td className="px-4 py-3 text-sm text-gray-700">毎月変動費</td>
+              <td className="px-4 py-3 text-sm font-semibold text-red-500 text-right">{fmt(expenseSummary.varMonthly)}</td>
+            </tr>
+            <tr>
+              <td className="px-4 py-3 text-sm text-gray-700">不定期固定費</td>
+              <td className="px-4 py-3 text-sm font-semibold text-red-500 text-right">{fmt(expenseSummary.fixedIrreg)}</td>
+            </tr>
+            <tr>
+              <td className="px-4 py-3 text-sm text-gray-700">不定期変動費</td>
+              <td className="px-4 py-3 text-sm font-semibold text-red-500 text-right">{fmt(expenseSummary.varIrreg)}</td>
+            </tr>
+          </tbody>
+        </table>
+        {/* Current month totals */}
+        <div className="px-4 py-3 border-t border-gray-100 bg-gray-50 space-y-1.5">
+          <p className="text-xs font-medium text-gray-500 mb-2">{currentYear}年{currentMonth}月 実績</p>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">収入</span>
+            <span className="font-semibold text-blue-600">{fmt(currentIncome)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">支出</span>
+            <span className="font-semibold text-red-500">{fmt(currentExpense)}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-600">投資・貯蓄</span>
+            <span className="font-semibold text-gray-700">{fmt(currentInvestment)}</span>
+          </div>
+          <div className="flex justify-between text-sm pt-1 border-t border-gray-200">
+            <span className="text-gray-600">支出率</span>
+            <span className={`font-bold ${currentExpenseRate >= 80 ? 'text-red-500' : 'text-gray-800'}`}>
+              {currentExpenseRate}%
+            </span>
+          </div>
         </div>
       </div>
 

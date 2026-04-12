@@ -11,6 +11,7 @@ export interface Transaction {
   type: TransactionType;
   category: string;
   subcategory: string;
+  minorCategory?: string;
   itemName: string;
   amount: number;
   note?: string;
