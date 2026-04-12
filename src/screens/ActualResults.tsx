@@ -65,7 +65,6 @@ export default function ActualResults() {
   const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState<FormState>(defaultForm);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [pieTab, setPieTab] = useState<'expense' | 'income'>('expense');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [reclassify, setReclassify] = useState<ReclassifyState | null>(null);
   const [applyToAll, setApplyToAll] = useState(false);
@@ -81,12 +80,6 @@ export default function ActualResults() {
   const balance = totalIncome - totalExpense - totalInvestment;
   const expenseRate = totalIncome > 0 ? Math.round(totalExpense / totalIncome * 100) : 0;
 
-  // Annual
-  const annualTx = useMemo(() => transactions.filter(t => t.year === selectedYear), [transactions, selectedYear]);
-  const monthsWithData = useMemo(() => { const s = new Set(annualTx.map(t => t.month)); return s.size || 1; }, [annualTx]);
-  const annualIncome = annualTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-  const annualExpense = annualTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-
   // Pie data
   const expensePieData = useMemo(() => {
     const map: Record<string, number> = {};
@@ -100,8 +93,8 @@ export default function ActualResults() {
     return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [monthlyTx]);
 
-  const activePieData = pieTab === 'expense' ? expensePieData : incomePieData;
-  const activePieTotal = activePieData.reduce((s, d) => s + d.value, 0);
+  const expensePieTotal = expensePieData.reduce((s, d) => s + d.value, 0);
+  const incomePieTotal = incomePieData.reduce((s, d) => s + d.value, 0);
 
   // Grouped transactions: by type → by subcategory
   const groupedTx = useMemo(() => {
@@ -210,9 +203,10 @@ export default function ActualResults() {
         {/* Expense rate — large main number */}
         <div className="text-center mb-4">
           <p className="text-xs text-gray-400 mb-1">支出率</p>
-          <p className={`text-5xl font-bold leading-none ${expenseRate >= 80 ? 'text-red-500' : 'text-gray-800'}`}>
-            {expenseRate}<span className="text-2xl font-semibold ml-1">%</span>
-          </p>
+          <div className={`flex items-baseline justify-center gap-1 ${expenseRate >= 80 ? 'text-red-500' : 'text-gray-800'}`}>
+            <span className="text-5xl font-bold">{expenseRate}</span>
+            <span className="text-2xl font-semibold">%</span>
+          </div>
         </div>
 
         {/* 3-column summary */}
@@ -236,59 +230,99 @@ export default function ActualResults() {
 
       <div className="p-4 space-y-4">
 
-        {/* ===== PIE CHART SECTION ===== */}
+        {/* ===== PIE CHART SECTION: 2-column ===== */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          {/* Tabs */}
-          <div className="flex border-b border-gray-100">
-            {(['expense', 'income'] as const).map(tab => (
-              <button
-                key={tab}
-                onClick={() => setPieTab(tab)}
-                className={`flex-1 py-2.5 text-sm font-medium transition-colors ${pieTab === tab ? (tab === 'expense' ? 'text-red-500 border-b-2 border-red-500' : 'text-blue-600 border-b-2 border-blue-600') : 'text-gray-400'}`}
-              >
-                {tab === 'expense' ? '支出' : '収入'}
-              </button>
-            ))}
-          </div>
-
-          {activePieData.length > 0 ? (
-            <>
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie data={activePieData} dataKey="value" cx="50%" cy="50%" innerRadius={50} outerRadius={80}>
-                    {activePieData.map((entry, i) => (
-                      <Cell key={i} fill={getCategoryColor(entry.name, i)} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(v: number) => fmt(v)} />
-                </PieChart>
-              </ResponsiveContainer>
-
-              {/* Category list */}
-              <div className="divide-y divide-gray-50 pb-1">
-                {activePieData.map((item, i) => {
-                  const pct = activePieTotal > 0 ? Math.round(item.value / activePieTotal * 100) : 0;
-                  const color = getCategoryColor(item.name, i);
-                  return (
-                    <div key={item.name} className="flex items-center px-4 py-2 gap-3">
-                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                      <span className="text-sm text-gray-700 flex-1">{item.name}</span>
-                      <span className="text-xs text-gray-400 w-8 text-right">{pct}%</span>
-                      <span className={`text-sm font-semibold w-24 text-right ${pieTab === 'expense' ? 'text-red-500' : 'text-blue-600'}`}>{fmt(item.value)}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-10 text-gray-300">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor" className="w-14 h-14 mb-2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6a7.5 7.5 0 100 15 7.5 7.5 0 000-15z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 10.875l-3.375 3.375" />
-              </svg>
-              <p className="text-sm">まだデータがありません</p>
+          <div className="grid grid-cols-2 divide-x divide-gray-100">
+            {/* LEFT: Income */}
+            <div className="flex flex-col">
+              <p className="text-xs font-medium text-blue-600 text-center py-2 border-b border-gray-100">収入</p>
+              {incomePieData.length > 0 ? (
+                <>
+                  <ResponsiveContainer width="100%" height={150}>
+                    <PieChart>
+                      <Pie data={incomePieData} dataKey="value" cx="50%" cy="50%" innerRadius={35} outerRadius={58}>
+                        {incomePieData.map((entry, i) => (
+                          <Cell key={i} fill={getCategoryColor(entry.name, i)} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v: number) => fmt(v)} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="divide-y divide-gray-50">
+                    {incomePieData.map((item, i) => {
+                      const pct = incomePieTotal > 0 ? Math.round(item.value / incomePieTotal * 100) : 0;
+                      const color = getCategoryColor(item.name, i);
+                      const repTx = monthlyTx.find(t => t.type === 'income' && (t.subcategory || t.category) === item.name);
+                      return (
+                        <div key={item.name} className="flex items-center px-2 py-1.5 gap-1.5">
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                          <span className="text-xs text-gray-700 flex-1 truncate">{item.name}</span>
+                          <span className="text-xs text-gray-400 shrink-0">{pct}%</span>
+                          {repTx && (
+                            <button onClick={() => openReclassify(repTx)} className="text-gray-300 hover:text-indigo-500 p-0.5 shrink-0" title="分類変更">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-center py-10 text-gray-300">
+                  <p className="text-xs">データなし</p>
+                </div>
+              )}
             </div>
-          )}
+
+            {/* RIGHT: Expense */}
+            <div className="flex flex-col">
+              <p className="text-xs font-medium text-red-500 text-center py-2 border-b border-gray-100">支出</p>
+              {expensePieData.length > 0 ? (
+                <>
+                  <ResponsiveContainer width="100%" height={150}>
+                    <PieChart>
+                      <Pie data={expensePieData} dataKey="value" cx="50%" cy="50%" innerRadius={35} outerRadius={58}>
+                        {expensePieData.map((entry, i) => (
+                          <Cell key={i} fill={getCategoryColor(entry.name, i)} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v: number) => fmt(v)} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="divide-y divide-gray-50">
+                    {expensePieData.map((item, i) => {
+                      const pct = expensePieTotal > 0 ? Math.round(item.value / expensePieTotal * 100) : 0;
+                      const color = getCategoryColor(item.name, i);
+                      const repTx = monthlyTx.find(t => t.type === 'expense' && (t.subcategory || t.category) === item.name);
+                      return (
+                        <div key={item.name} className="flex items-center px-2 py-1.5 gap-1.5">
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                          <span className="text-xs text-gray-700 flex-1 truncate">{item.name}</span>
+                          <span className="text-xs text-gray-400 shrink-0">{pct}%</span>
+                          {repTx && (
+                            <button onClick={() => openReclassify(repTx)} className="text-gray-300 hover:text-indigo-500 p-0.5 shrink-0" title="分類変更">
+                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="flex items-center justify-center py-10 text-gray-300">
+                  <p className="text-xs">データなし</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* ===== ACTION BUTTONS ===== */}
@@ -367,16 +401,6 @@ export default function ActualResults() {
           })}
         </div>
 
-        {/* ===== ANNUAL SUMMARY ===== */}
-        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">{selectedYear}年 年間サマリー</h3>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div><p className="text-xs text-gray-400">月平均収入</p><p className="font-semibold text-blue-600">{fmt(Math.round(annualIncome / monthsWithData))}</p></div>
-            <div><p className="text-xs text-gray-400">月平均支出</p><p className="font-semibold text-red-500">{fmt(Math.round(annualExpense / monthsWithData))}</p></div>
-            <div><p className="text-xs text-gray-400">年間収入合計</p><p className="font-semibold text-blue-600">{fmt(annualIncome)}</p></div>
-            <div><p className="text-xs text-gray-400">年間支出合計</p><p className="font-semibold text-red-500">{fmt(annualExpense)}</p></div>
-          </div>
-        </div>
 
       </div>
 
