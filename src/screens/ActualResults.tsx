@@ -188,12 +188,12 @@ export default function ActualResults() {
   if (!currentProfile) return <div className="flex items-center justify-center h-64"><p className="text-gray-500">プロファイルを作成してください</p></div>;
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="w-full">
 
       {/* ===== TOP HEADER SECTION ===== */}
-      <div className="bg-white border-b border-gray-100 px-4 pt-4 pb-3">
+      <div className="bg-white border-b border-gray-100 px-4 pt-4 pb-4">
         {/* Month navigation */}
-        <div className="flex items-center justify-center gap-4 mb-2">
+        <div className="flex items-center justify-center gap-4 mb-3">
           <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
@@ -207,12 +207,13 @@ export default function ActualResults() {
           </button>
         </div>
 
-        {/* Expense rate */}
-        {totalIncome > 0 && (
-          <p className={`text-center text-sm mb-3 ${expenseRate > 80 ? 'text-red-500 font-bold' : 'text-gray-500'}`}>
-            支出率 {expenseRate}%{expenseRate > 80 ? ' ⚠️' : ''}
+        {/* Expense rate — large main number */}
+        <div className="text-center mb-4">
+          <p className="text-xs text-gray-400 mb-1">支出率</p>
+          <p className={`text-5xl font-bold leading-none ${expenseRate >= 80 ? 'text-red-500' : 'text-gray-800'}`}>
+            {expenseRate}<span className="text-2xl font-semibold ml-1">%</span>
           </p>
-        )}
+        </div>
 
         {/* 3-column summary */}
         <div className="grid grid-cols-3 divide-x divide-gray-100">
@@ -236,55 +237,59 @@ export default function ActualResults() {
       <div className="p-4 space-y-4">
 
         {/* ===== PIE CHART SECTION ===== */}
-        {(expensePieData.length > 0 || incomePieData.length > 0) && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            {/* Tabs */}
-            <div className="flex border-b border-gray-100">
-              {(['expense', 'income'] as const).map(tab => (
-                <button
-                  key={tab}
-                  onClick={() => setPieTab(tab)}
-                  className={`flex-1 py-2.5 text-sm font-medium transition-colors ${pieTab === tab ? (tab === 'expense' ? 'text-red-500 border-b-2 border-red-500' : 'text-blue-600 border-b-2 border-blue-600') : 'text-gray-400'}`}
-                >
-                  {tab === 'expense' ? '支出' : '収入'}
-                </button>
-              ))}
-            </div>
-
-            {activePieData.length > 0 ? (
-              <>
-                <ResponsiveContainer width="100%" height={200}>
-                  <PieChart>
-                    <Pie data={activePieData} dataKey="value" cx="50%" cy="50%" innerRadius={50} outerRadius={80}>
-                      {activePieData.map((entry, i) => (
-                        <Cell key={i} fill={getCategoryColor(entry.name, i)} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(v: number) => fmt(v)} />
-                  </PieChart>
-                </ResponsiveContainer>
-
-                {/* Category list */}
-                <div className="divide-y divide-gray-50 pb-1">
-                  {activePieData.map((item, i) => {
-                    const pct = activePieTotal > 0 ? Math.round(item.value / activePieTotal * 100) : 0;
-                    const color = getCategoryColor(item.name, i);
-                    return (
-                      <div key={item.name} className="flex items-center px-4 py-2 gap-3">
-                        <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                        <span className="text-sm text-gray-700 flex-1">{item.name}</span>
-                        <span className="text-xs text-gray-400 w-8 text-right">{pct}%</span>
-                        <span className={`text-sm font-semibold w-24 text-right ${pieTab === 'expense' ? 'text-red-500' : 'text-blue-600'}`}>{fmt(item.value)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            ) : (
-              <p className="text-center text-gray-400 text-sm py-8">データがありません</p>
-            )}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          {/* Tabs */}
+          <div className="flex border-b border-gray-100">
+            {(['expense', 'income'] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setPieTab(tab)}
+                className={`flex-1 py-2.5 text-sm font-medium transition-colors ${pieTab === tab ? (tab === 'expense' ? 'text-red-500 border-b-2 border-red-500' : 'text-blue-600 border-b-2 border-blue-600') : 'text-gray-400'}`}
+              >
+                {tab === 'expense' ? '支出' : '収入'}
+              </button>
+            ))}
           </div>
-        )}
+
+          {activePieData.length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie data={activePieData} dataKey="value" cx="50%" cy="50%" innerRadius={50} outerRadius={80}>
+                    {activePieData.map((entry, i) => (
+                      <Cell key={i} fill={getCategoryColor(entry.name, i)} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v: number) => fmt(v)} />
+                </PieChart>
+              </ResponsiveContainer>
+
+              {/* Category list */}
+              <div className="divide-y divide-gray-50 pb-1">
+                {activePieData.map((item, i) => {
+                  const pct = activePieTotal > 0 ? Math.round(item.value / activePieTotal * 100) : 0;
+                  const color = getCategoryColor(item.name, i);
+                  return (
+                    <div key={item.name} className="flex items-center px-4 py-2 gap-3">
+                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                      <span className="text-sm text-gray-700 flex-1">{item.name}</span>
+                      <span className="text-xs text-gray-400 w-8 text-right">{pct}%</span>
+                      <span className={`text-sm font-semibold w-24 text-right ${pieTab === 'expense' ? 'text-red-500' : 'text-blue-600'}`}>{fmt(item.value)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-10 text-gray-300">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1} stroke="currentColor" className="w-14 h-14 mb-2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6a7.5 7.5 0 100 15 7.5 7.5 0 000-15z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 10.875l-3.375 3.375" />
+              </svg>
+              <p className="text-sm">まだデータがありません</p>
+            </div>
+          )}
+        </div>
 
         {/* ===== ACTION BUTTONS ===== */}
         <div className="flex gap-2">
@@ -299,13 +304,13 @@ export default function ActualResults() {
         </div>
 
         {/* ===== GROUPED TRANSACTION LIST ===== */}
-        {groupedTx.length === 0 ? (
-          <div className="bg-white rounded-xl p-8 text-center shadow-sm border border-gray-100">
-            <p className="text-gray-400 text-sm">この月の取引はありません</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {groupedTx.map(group => {
+        <div className="space-y-2">
+          {groupedTx.length === 0 && (
+            <div className="bg-white rounded-xl px-4 py-5 text-center shadow-sm border border-gray-100">
+              <p className="text-gray-400 text-sm">この月の取引はまだありません</p>
+            </div>
+          )}
+          {groupedTx.map(group => {
               const key = `${group.type}-${group.subcategory}`;
               const expanded = expandedGroups.has(key);
               return (
@@ -359,9 +364,8 @@ export default function ActualResults() {
                   )}
                 </div>
               );
-            })}
-          </div>
-        )}
+          })}
+        </div>
 
         {/* ===== ANNUAL SUMMARY ===== */}
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
