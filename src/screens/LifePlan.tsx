@@ -13,8 +13,6 @@ function formatAmount(n: number): string {
   return n.toLocaleString('ja-JP');
 }
 
-type Tab = 'family' | 'plan';
-
 interface MemberForm {
   name: string;
   birthYear: number;
@@ -45,7 +43,6 @@ const defaultEventForm: EventForm = {
 
 export default function LifePlan() {
   const { currentProfile, updateProfile, lifeEvents, addLifeEvent, updateLifeEvent, deleteLifeEvent, transactions, budgets } = useApp();
-  const [activeTab, setActiveTab] = useState<Tab>('family');
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
   const [memberForm, setMemberForm] = useState<MemberForm>(defaultMemberForm);
@@ -176,45 +173,29 @@ export default function LifePlan() {
   }
 
   return (
-    <div className="p-4 max-w-full space-y-4">
-      {/* Tabs */}
-      <div className="flex bg-gray-100 rounded-xl p-1 gap-1">
-        {([['family', '家族設定'], ['plan', 'ライフプランシート']] as [Tab, string][]).map(([tab, label]) => (
+    <div className="p-4 w-full space-y-4">
+
+      {/* ===== FAMILY MEMBERS ===== */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-700">家族メンバー</h2>
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === tab ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-            }`}
+            onClick={() => { setMemberForm(defaultMemberForm); setEditingMemberId(null); setShowMemberModal(true); }}
+            className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors flex items-center gap-1"
           >
-            {label}
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            メンバーを追加
           </button>
-        ))}
-      </div>
-
-      {/* Family tab */}
-      {activeTab === 'family' && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-700">家族メンバー</h2>
-            <button
-              onClick={() => { setMemberForm(defaultMemberForm); setEditingMemberId(null); setShowMemberModal(true); }}
-              className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors flex items-center gap-1"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              メンバーを追加
-            </button>
+        </div>
+        {members.length === 0 ? (
+          <div className="bg-white rounded-xl p-6 text-center shadow-sm border border-gray-100">
+            <p className="text-gray-400 text-sm">メンバーが登録されていません</p>
           </div>
-
-          {members.length === 0 ? (
-            <div className="bg-white rounded-xl p-8 text-center shadow-sm border border-gray-100">
-              <p className="text-gray-400 text-sm">メンバーが登録されていません</p>
-              <p className="text-gray-400 text-xs mt-1">家族のメンバーを追加してください</p>
-            </div>
-          ) : (
-            members.map(member => (
+        ) : (
+          <div className="space-y-2">
+            {members.map(member => (
               <div key={member.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2">
@@ -224,246 +205,185 @@ export default function LifePlan() {
                   <p className="text-xs text-gray-500 mt-0.5">生年: {member.birthYear}年 · 現在 {new Date().getFullYear() - member.birthYear}歳</p>
                 </div>
                 <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => openEditMember(member)}
-                    className="text-gray-400 hover:text-indigo-500 p-1.5"
-                  >
+                  <button onClick={() => openEditMember(member)} className="text-gray-400 hover:text-indigo-500 p-1.5">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
                     </svg>
                   </button>
-                  <button
-                    onClick={() => handleDeleteMember(member.id)}
-                    className="text-gray-400 hover:text-red-500 p-1.5"
-                  >
+                  <button onClick={() => handleDeleteMember(member.id)} className="text-gray-400 hover:text-red-500 p-1.5">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
                     </svg>
                   </button>
                 </div>
               </div>
-            ))
-          )}
+            ))}
+          </div>
+        )}
+      </div>
 
-          {/* Life events section */}
-          <div className="mt-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-sm font-semibold text-gray-700">ライフイベント</h2>
-              <button
-                onClick={() => { setEventForm(defaultEventForm); setEditingEventId(null); setShowEventModal(true); }}
-                className="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors flex items-center gap-1"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
-                イベントを追加
-              </button>
-            </div>
-            {lifeEvents.length === 0 ? (
-              <div className="bg-white rounded-xl p-6 text-center shadow-sm border border-gray-100">
-                <p className="text-gray-400 text-sm">イベントが登録されていません</p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {lifeEvents.sort((a, b) => a.year - b.year).map(event => {
-                  const memberName = event.memberId
-                    ? members.find(m => m.id === event.memberId)?.name || '全員'
-                    : '全員';
-                  return (
-                    <div key={event.id} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex items-start justify-between">
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">{event.year}年</span>
-                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{memberName}</span>
-                          <span className="text-sm font-semibold text-gray-800">{event.title}</span>
-                        </div>
-                        {event.description && <p className="text-xs text-gray-500 mt-1">{event.description}</p>}
-                        {event.amount && (
-                          <p className="text-xs text-indigo-600 mt-0.5 font-medium">予算: {event.amount.toLocaleString()}円</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1 ml-2 shrink-0">
-                        <button
-                          onClick={() => openEditEvent(event)}
-                          className="text-gray-400 hover:text-indigo-500 p-1"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => deleteLifeEvent(event.id)}
-                          className="text-gray-400 hover:text-red-500 p-1"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                          </svg>
-                        </button>
-                      </div>
+      {/* ===== LIFE EVENTS ===== */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-700">ライフイベント</h2>
+          <button
+            onClick={() => { setEventForm(defaultEventForm); setEditingEventId(null); setShowEventModal(true); }}
+            className="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors flex items-center gap-1"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            イベントを追加
+          </button>
+        </div>
+        {lifeEvents.length === 0 ? (
+          <div className="bg-white rounded-xl p-6 text-center shadow-sm border border-gray-100">
+            <p className="text-gray-400 text-sm">イベントが登録されていません</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {lifeEvents.sort((a, b) => a.year - b.year).map(event => {
+              const memberName = event.memberId ? members.find(m => m.id === event.memberId)?.name || '全員' : '全員';
+              return (
+                <div key={event.id} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">{event.year}年</span>
+                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{memberName}</span>
+                      <span className="text-sm font-semibold text-gray-800">{event.title}</span>
                     </div>
+                    {event.description && <p className="text-xs text-gray-500 mt-1">{event.description}</p>}
+                    {event.amount && <p className="text-xs text-indigo-600 mt-0.5 font-medium">予算: {event.amount.toLocaleString()}円</p>}
+                  </div>
+                  <div className="flex items-center gap-1 ml-2 shrink-0">
+                    <button onClick={() => openEditEvent(event)} className="text-gray-400 hover:text-indigo-500 p-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                      </svg>
+                    </button>
+                    <button onClick={() => deleteLifeEvent(event.id)} className="text-gray-400 hover:text-red-500 p-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ===== CASHFLOW TABLE ===== */}
+      <div className="space-y-3">
+        <h2 className="text-sm font-semibold text-gray-700">キャッシュフロー表 (2025〜2060)</h2>
+        <div className="overflow-x-auto rounded-xl shadow-sm border border-gray-100 bg-white">
+          <table className="text-xs min-w-max">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="text-left px-3 py-2.5 font-semibold text-gray-600 sticky left-0 bg-gray-50 min-w-[120px] z-10">項目</th>
+                {PLAN_YEARS.map(y => (
+                  <th key={y} className="px-2 py-2.5 font-semibold text-gray-500 text-center min-w-[52px] whitespace-nowrap">{y}年</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {members.length > 0 && (
+                <>
+                  <tr className="bg-indigo-50/50 border-b border-indigo-100">
+                    <td colSpan={PLAN_YEARS.length + 1} className="px-3 py-1.5 sticky left-0 bg-indigo-50/50 z-10">
+                      <span className="text-xs font-bold text-indigo-600">家族の年齢</span>
+                    </td>
+                  </tr>
+                  {members.map(member => (
+                    <tr key={member.id} className="border-b border-gray-50 hover:bg-gray-50">
+                      <td className="px-3 py-2 sticky left-0 bg-white z-10 hover:bg-gray-50">
+                        <p className="font-medium text-gray-700">{member.name}</p>
+                        <p className="text-gray-400 text-[10px]">{member.relation}</p>
+                      </td>
+                      {PLAN_YEARS.map(y => {
+                        const age = y - member.birthYear;
+                        const isSpecial = [20, 25, 30, 40, 50, 60, 65].includes(age);
+                        return (
+                          <td key={y} className={`px-2 py-2 text-center ${isSpecial ? 'font-bold text-indigo-600' : 'text-gray-600'}`}>
+                            {age >= 0 ? age : '-'}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </>
+              )}
+              <tr className="border-b border-purple-100 bg-purple-50/30">
+                <td className="px-3 py-2 sticky left-0 bg-purple-50/30 z-10">
+                  <p className="font-bold text-purple-600">ライフイベント</p>
+                </td>
+                {PLAN_YEARS.map(y => {
+                  const events = eventsByYear[y] || [];
+                  return (
+                    <td key={y} className="px-1 py-2 text-center align-top">
+                      {events.map(e => (
+                        <div key={e.id} className="bg-purple-100 text-purple-700 rounded px-1 py-0.5 mb-0.5 text-[10px] leading-tight">{e.title}</div>
+                      ))}
+                    </td>
                   );
                 })}
-              </div>
-            )}
-          </div>
+              </tr>
+              <tr className="bg-gray-100 border-t-2 border-gray-300">
+                <td colSpan={PLAN_YEARS.length + 1} className="px-3 py-1.5 sticky left-0 bg-gray-100 z-10">
+                  <span className="text-xs font-bold text-gray-600">キャッシュフロー</span>
+                </td>
+              </tr>
+              <tr className="border-b border-gray-50 hover:bg-gray-50">
+                <td className="px-3 py-2 sticky left-0 bg-white z-10 hover:bg-gray-50">
+                  <p className="font-medium text-blue-700">収入合計</p>
+                  <p className="text-gray-400 text-[10px]">予算/実績</p>
+                </td>
+                {cashFlowWithCumulative.map(row => (
+                  <td key={row.year} className="px-2 py-2 text-center text-blue-600 font-medium">{formatAmount(row.income)}</td>
+                ))}
+              </tr>
+              <tr className="border-b border-gray-50 hover:bg-gray-50">
+                <td className="px-3 py-2 sticky left-0 bg-white z-10 hover:bg-gray-50">
+                  <p className="font-medium text-red-600">支出合計</p>
+                </td>
+                {cashFlowWithCumulative.map(row => (
+                  <td key={row.year} className="px-2 py-2 text-center text-red-500 font-medium">{formatAmount(row.expense)}</td>
+                ))}
+              </tr>
+              <tr className="border-b border-gray-50 hover:bg-gray-50">
+                <td className="px-3 py-2 sticky left-0 bg-white z-10 hover:bg-gray-50">
+                  <p className="font-medium text-gray-600">投資・貯蓄</p>
+                </td>
+                {cashFlowWithCumulative.map(row => (
+                  <td key={row.year} className="px-2 py-2 text-center text-gray-500 font-medium">{formatAmount(row.investment)}</td>
+                ))}
+              </tr>
+              <tr className="border-b border-gray-100 bg-gray-50">
+                <td className="px-3 py-2 sticky left-0 bg-gray-50 z-10">
+                  <p className="font-bold text-gray-700">収支バランス</p>
+                </td>
+                {cashFlowWithCumulative.map(row => (
+                  <td key={row.year} className={`px-2 py-2 text-center font-bold ${row.balance >= 0 ? 'text-gray-800' : 'text-red-500'}`}>
+                    {row.balance !== 0 ? (row.balance >= 0 ? '+' : '') + formatAmount(row.balance) : '-'}
+                  </td>
+                ))}
+              </tr>
+              <tr className="bg-indigo-50">
+                <td className="px-3 py-2.5 sticky left-0 bg-indigo-50 z-10">
+                  <p className="font-bold text-indigo-700">累積残高</p>
+                  <p className="text-indigo-400 text-[10px]">（繰越）</p>
+                </td>
+                {cashFlowWithCumulative.map(row => (
+                  <td key={row.year} className={`px-2 py-2.5 text-center font-bold text-sm ${row.cumulative >= 0 ? 'text-gray-800' : 'text-red-600'}`}>
+                    {row.cumulative !== 0 ? (row.cumulative >= 0 ? '+' : '') + formatAmount(row.cumulative) : '-'}
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
         </div>
-      )}
-
-      {/* Life Plan Sheet tab */}
-      {activeTab === 'plan' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-700">ライフプランシート (2025〜2060)</h2>
-            <button
-              onClick={() => { setEventForm(defaultEventForm); setEditingEventId(null); setShowEventModal(true); }}
-              className="text-xs bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg font-medium hover:bg-purple-200 transition-colors"
-            >
-              + イベント追加
-            </button>
-          </div>
-
-          <div className="overflow-x-auto rounded-xl shadow-sm border border-gray-100 bg-white">
-            <table className="text-xs min-w-max">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left px-3 py-2.5 font-semibold text-gray-600 sticky left-0 bg-gray-50 min-w-[120px] z-10">項目</th>
-                  {PLAN_YEARS.map(y => (
-                    <th key={y} className="px-2 py-2.5 font-semibold text-gray-500 text-center min-w-[52px] whitespace-nowrap">
-                      {y}年
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {/* Family members rows */}
-                {members.length > 0 && (
-                  <>
-                    <tr className="bg-indigo-50/50 border-b border-indigo-100">
-                      <td colSpan={PLAN_YEARS.length + 1} className="px-3 py-1.5 sticky left-0 bg-indigo-50/50 z-10">
-                        <span className="text-xs font-bold text-indigo-600">家族の年齢</span>
-                      </td>
-                    </tr>
-                    {members.map(member => (
-                      <tr key={member.id} className="border-b border-gray-50 hover:bg-gray-50">
-                        <td className="px-3 py-2 sticky left-0 bg-white z-10 hover:bg-gray-50">
-                          <p className="font-medium text-gray-700">{member.name}</p>
-                          <p className="text-gray-400 text-[10px]">{member.relation}</p>
-                        </td>
-                        {PLAN_YEARS.map(y => {
-                          const age = y - member.birthYear;
-                          const isSpecial = [20, 25, 30, 40, 50, 60, 65].includes(age);
-                          return (
-                            <td key={y} className={`px-2 py-2 text-center ${isSpecial ? 'font-bold text-indigo-600' : 'text-gray-600'}`}>
-                              {age >= 0 ? age : '-'}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </>
-                )}
-
-                {/* Life events row */}
-                <tr className="border-b border-purple-100 bg-purple-50/30">
-                  <td className="px-3 py-2 sticky left-0 bg-purple-50/30 z-10">
-                    <p className="font-bold text-purple-600">ライフイベント</p>
-                  </td>
-                  {PLAN_YEARS.map(y => {
-                    const events = eventsByYear[y] || [];
-                    return (
-                      <td key={y} className="px-1 py-2 text-center align-top">
-                        {events.map(e => (
-                          <div key={e.id} className="bg-purple-100 text-purple-700 rounded px-1 py-0.5 mb-0.5 text-[10px] leading-tight">
-                            {e.title}
-                          </div>
-                        ))}
-                      </td>
-                    );
-                  })}
-                </tr>
-
-                {/* Cash flow section */}
-                <tr className="bg-gray-100 border-t-2 border-gray-300">
-                  <td colSpan={PLAN_YEARS.length + 1} className="px-3 py-1.5 sticky left-0 bg-gray-100 z-10">
-                    <span className="text-xs font-bold text-gray-600">キャッシュフロー</span>
-                  </td>
-                </tr>
-
-                {/* Income */}
-                <tr className="border-b border-gray-50 hover:bg-gray-50">
-                  <td className="px-3 py-2 sticky left-0 bg-white z-10 hover:bg-gray-50">
-                    <p className="font-medium text-emerald-700">収入合計</p>
-                    <p className="text-gray-400 text-[10px]">予算/実績</p>
-                  </td>
-                  {cashFlowWithCumulative.map(row => (
-                    <td key={row.year} className="px-2 py-2 text-center text-blue-600 font-medium">
-                      {formatAmount(row.income)}
-                    </td>
-                  ))}
-                </tr>
-
-                {/* Expense */}
-                <tr className="border-b border-gray-50 hover:bg-gray-50">
-                  <td className="px-3 py-2 sticky left-0 bg-white z-10 hover:bg-gray-50">
-                    <p className="font-medium text-red-600">支出合計</p>
-                  </td>
-                  {cashFlowWithCumulative.map(row => (
-                    <td key={row.year} className="px-2 py-2 text-center text-red-500 font-medium">
-                      {formatAmount(row.expense)}
-                    </td>
-                  ))}
-                </tr>
-
-                {/* Investment */}
-                <tr className="border-b border-gray-50 hover:bg-gray-50">
-                  <td className="px-3 py-2 sticky left-0 bg-white z-10 hover:bg-gray-50">
-                    <p className="font-medium text-blue-600">投資・貯蓄</p>
-                  </td>
-                  {cashFlowWithCumulative.map(row => (
-                    <td key={row.year} className="px-2 py-2 text-center text-blue-500 font-medium">
-                      {formatAmount(row.investment)}
-                    </td>
-                  ))}
-                </tr>
-
-                {/* Balance */}
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <td className="px-3 py-2 sticky left-0 bg-gray-50 z-10">
-                    <p className="font-bold text-gray-700">収支バランス</p>
-                  </td>
-                  {cashFlowWithCumulative.map(row => (
-                    <td key={row.year} className={`px-2 py-2 text-center font-bold ${row.balance >= 0 ? 'text-gray-800' : 'text-red-500'}`}>
-                      {row.balance !== 0 ? (row.balance >= 0 ? '+' : '') + formatAmount(row.balance) : '-'}
-                    </td>
-                  ))}
-                </tr>
-
-                {/* Cumulative */}
-                <tr className="bg-indigo-50">
-                  <td className="px-3 py-2.5 sticky left-0 bg-indigo-50 z-10">
-                    <p className="font-bold text-indigo-700">累積残高</p>
-                    <p className="text-indigo-400 text-[10px]">（繰越）</p>
-                  </td>
-                  {cashFlowWithCumulative.map(row => (
-                    <td key={row.year} className={`px-2 py-2.5 text-center font-bold text-sm ${row.cumulative >= 0 ? 'text-gray-800' : 'text-red-600'}`}>
-                      {row.cumulative !== 0 ? (row.cumulative >= 0 ? '+' : '') + formatAmount(row.cumulative) : '-'}
-                    </td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {members.length === 0 && (
-            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-indigo-500 shrink-0">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
-              </svg>
-              <p className="text-sm text-indigo-700">「家族設定」タブからメンバーを追加すると年齢推移が表示されます</p>
-            </div>
-          )}
-        </div>
-      )}
+      </div>
 
       {/* Member modal */}
       {showMemberModal && (
