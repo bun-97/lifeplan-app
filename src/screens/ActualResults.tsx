@@ -156,14 +156,18 @@ export default function ActualResults() {
       <div className="bg-white border-b border-gray-100 px-4 pt-4 pb-4">
         {/* Month navigation - card style */}
         <div className="flex items-center mb-3">
-          <button onClick={prevMonth} className="text-2xl py-4 px-4 text-gray-400 hover:text-gray-600">
-            &lt;
+          <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+            </svg>
           </button>
           <div className="flex-1 text-center font-semibold text-lg text-gray-800">
             {selectedYear}年{selectedMonth}月
           </div>
-          <button onClick={nextMonth} className="text-2xl py-4 px-4 text-gray-400 hover:text-gray-600">
-            &gt;
+          <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+            </svg>
           </button>
         </div>
 
@@ -230,6 +234,7 @@ export default function ActualResults() {
                             <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
                             <span className="text-xs text-gray-700 flex-1 truncate text-left">{item.name}</span>
                             <span className="text-xs text-gray-400 shrink-0">{pct}%</span>
+                            <span className="text-xs text-gray-500 shrink-0">{fmtShort(item.value)}</span>
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-3 h-3 text-gray-300 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                             </svg>
@@ -300,6 +305,7 @@ export default function ActualResults() {
                             <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
                             <span className="text-xs text-gray-700 flex-1 truncate text-left">{item.name}</span>
                             <span className="text-xs text-gray-400 shrink-0">{pct}%</span>
+                            <span className="text-xs text-gray-500 shrink-0">{fmtShort(item.value)}</span>
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-3 h-3 text-gray-300 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                             </svg>
