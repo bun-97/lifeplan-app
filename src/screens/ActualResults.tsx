@@ -70,22 +70,22 @@ export default function ActualResults() {
     [transactions, selectedYear, selectedMonth]
   );
 
-  const totalIncome = useMemo(() => monthlyTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0), [monthlyTx]);
-  const totalExpense = useMemo(() => monthlyTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0), [monthlyTx]);
-  const totalInvestment = useMemo(() => monthlyTx.filter(t => t.type === 'investment').reduce((s, t) => s + t.amount, 0), [monthlyTx]);
+  const totalIncome = useMemo(() => monthlyTx.filter(t => t.type === 'income' && !t.excluded).reduce((s, t) => s + t.amount, 0), [monthlyTx]);
+  const totalExpense = useMemo(() => monthlyTx.filter(t => t.type === 'expense' && !t.excluded).reduce((s, t) => s + t.amount, 0), [monthlyTx]);
+  const totalInvestment = useMemo(() => monthlyTx.filter(t => t.type === 'investment' && !t.excluded).reduce((s, t) => s + t.amount, 0), [monthlyTx]);
   const balance = totalIncome - totalExpense - totalInvestment;
   const expenseRate = totalIncome > 0 ? Math.round(totalExpense / totalIncome * 100) : 0;
 
   // Pie data
   const expensePieData = useMemo(() => {
     const map: Record<string, number> = {};
-    monthlyTx.filter(t => t.type === 'expense').forEach(t => { const k = t.subcategory || t.itemName; map[k] = (map[k] || 0) + t.amount; });
+    monthlyTx.filter(t => t.type === 'expense' && !t.excluded).forEach(t => { const k = t.subcategory || t.itemName; map[k] = (map[k] || 0) + t.amount; });
     return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [monthlyTx]);
 
   const incomePieData = useMemo(() => {
     const map: Record<string, number> = {};
-    monthlyTx.filter(t => t.type === 'income').forEach(t => { const k = t.subcategory || t.itemName; map[k] = (map[k] || 0) + t.amount; });
+    monthlyTx.filter(t => t.type === 'income' && !t.excluded).forEach(t => { const k = t.subcategory || t.itemName; map[k] = (map[k] || 0) + t.amount; });
     return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [monthlyTx]);
 
@@ -242,9 +242,9 @@ export default function ActualResults() {
                           {expanded && (
                             <div className="bg-gray-50 border-t border-gray-100 divide-y divide-gray-100">
                               {txItems.map(tx => (
-                                <div key={tx.id} className="flex items-center px-2 py-1.5 gap-1">
+                                <div key={tx.id} className={`flex items-center px-2 py-1.5 gap-1 ${tx.excluded ? 'opacity-40' : ''}`}>
                                   <div className="flex-1 min-w-0">
-                                    <p className="text-xs text-gray-700 truncate">{tx.itemName}</p>
+                                    <p className={`text-xs text-gray-700 truncate ${tx.excluded ? 'line-through' : ''}`}>{tx.itemName}</p>
                                     <p className="text-[10px] text-gray-400">{selectedMonth}/{tx.day || '?'} · {fmt(tx.amount)}</p>
                                     <div className="flex gap-1 flex-wrap mt-0.5">
                                       {tx.budgetType && (
@@ -255,6 +255,21 @@ export default function ActualResults() {
                                       )}
                                     </div>
                                   </div>
+                                  <button
+                                    onClick={() => updateTransaction({ ...tx, excluded: !tx.excluded })}
+                                    className={`p-0.5 shrink-0 ${tx.excluded ? 'text-orange-400' : 'text-gray-300 hover:text-orange-400'}`}
+                                    title={tx.excluded ? '集計に含める' : '集計から除外'}
+                                  >
+                                    {tx.excluded ? (
+                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+                                      </svg>
+                                    ) : (
+                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                      </svg>
+                                    )}
+                                  </button>
                                   <button onClick={() => openReclassify(tx)} className="text-gray-300 hover:text-indigo-500 p-0.5 shrink-0" title="分類変更">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
@@ -313,9 +328,9 @@ export default function ActualResults() {
                           {expanded && (
                             <div className="bg-gray-50 border-t border-gray-100 divide-y divide-gray-100">
                               {txItems.map(tx => (
-                                <div key={tx.id} className="flex items-center px-2 py-1.5 gap-1">
+                                <div key={tx.id} className={`flex items-center px-2 py-1.5 gap-1 ${tx.excluded ? 'opacity-40' : ''}`}>
                                   <div className="flex-1 min-w-0">
-                                    <p className="text-xs text-gray-700 truncate">{tx.itemName}</p>
+                                    <p className={`text-xs text-gray-700 truncate ${tx.excluded ? 'line-through' : ''}`}>{tx.itemName}</p>
                                     <p className="text-[10px] text-gray-400">{selectedMonth}/{tx.day || '?'} · {fmt(tx.amount)}</p>
                                     <div className="flex gap-1 flex-wrap mt-0.5">
                                       {tx.expenseType && (
@@ -326,6 +341,21 @@ export default function ActualResults() {
                                       )}
                                     </div>
                                   </div>
+                                  <button
+                                    onClick={() => updateTransaction({ ...tx, excluded: !tx.excluded })}
+                                    className={`p-0.5 shrink-0 ${tx.excluded ? 'text-orange-400' : 'text-gray-300 hover:text-orange-400'}`}
+                                    title={tx.excluded ? '集計に含める' : '集計から除外'}
+                                  >
+                                    {tx.excluded ? (
+                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+                                      </svg>
+                                    ) : (
+                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                                      </svg>
+                                    )}
+                                  </button>
                                   <button onClick={() => openReclassify(tx)} className="text-gray-300 hover:text-indigo-500 p-0.5 shrink-0" title="分類変更">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />

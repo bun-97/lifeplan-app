@@ -1,7 +1,25 @@
 import { useState } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { TransactionType } from '../types';
+import { TransactionType, Transaction, ImportHistory } from '../types';
 import { getCategoryRules } from '../lib/categoryRules';
+import { v4 as uuidv4 } from 'uuid';
+
+const IMPORT_HISTORY_KEY = 'lifeplan_import_history';
+
+function loadImportHistories(): ImportHistory[] {
+  try {
+    const raw = localStorage.getItem(IMPORT_HISTORY_KEY);
+    return raw ? (JSON.parse(raw) as ImportHistory[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveImportHistory(history: ImportHistory): void {
+  const existing = loadImportHistories();
+  existing.push(history);
+  localStorage.setItem(IMPORT_HISTORY_KEY, JSON.stringify(existing));
+}
 
 interface ParsedRow {
   date: string;
@@ -16,20 +34,19 @@ interface ParsedRow {
   selected: boolean;
   isTransfer: boolean;
   isExcluded: boolean;
+  isDuplicate: boolean;
+  isNearDuplicate: boolean;
+  nearDuplicateInfo?: string;
+  autoExcluded: boolean;
+  userExcludeDecision?: 'import' | 'skip';
 }
 
 // 大項目・中項目から種別を判定
 function detectType(bigCat: string, midCat: string, amount: number): TransactionType {
-  // 収入カテゴリ
   if (bigCat === '収入') return 'income';
-
-  // 投資・貯蓄カテゴリ
   const investWords = ['株式投資', '積立', 'NISA', 'iDeCo', '投資信託', '定期預金', '貯蓄', '投資'];
   if (investWords.some(w => midCat.includes(w) || bigCat.includes(w))) return 'investment';
-
-  // プラス金額で収入カテゴリ以外 → 収入（その他）
   if (amount > 0) return 'income';
-
   return 'expense';
 }
 
@@ -40,8 +57,6 @@ function detectCategory(type: TransactionType, bigCat: string, midCat: string): 
     return budgetWords.some(w => midCat.includes(w) || bigCat.includes(w)) ? '予算内' : '予算外';
   }
   if (type === 'investment') return '積立投資';
-
-  // 支出カテゴリ判定
   const fixedWords = ['家賃', '住宅ローン', 'ローン', '通信費', '保険', 'サブスク', 'NHK', '電気', 'ガス', '水道', '駐車場', '税金'];
   if (fixedWords.some(w => midCat.includes(w) || bigCat.includes(w))) return '毎月固定費';
   return '毎月変動費';
@@ -51,11 +66,8 @@ function parseData(text: string): ParsedRow[] {
   const lines = text.trim().split('\n').filter(l => l.trim());
   if (lines.length < 2) return [];
 
-  // タブ区切り or カンマ区切りを自動検出
   const firstLine = lines[0];
   const delimiter = firstLine.includes('\t') ? '\t' : ',';
-
-  // ヘッダー行をスキップ
   const isHeader = firstLine.includes('日付') || firstLine.includes('内容') || firstLine.includes('金額');
   const dataLines = isHeader ? lines.slice(1) : lines;
 
@@ -63,7 +75,6 @@ function parseData(text: string): ParsedRow[] {
 
   for (const line of dataLines) {
     let cols: string[];
-
     if (delimiter === '\t') {
       cols = line.split('\t').map(c => c.trim());
     } else {
@@ -73,7 +84,6 @@ function parseData(text: string): ParsedRow[] {
 
     if (cols.length < 4) continue;
 
-    // フォーマット: 計算対象, 日付, 内容, 金額（円）, 保有金融機関, 大項目, 中項目, メモ, 振替, ID
     const calcTarget = cols[0];
     const dateStr = cols[1];
     const content = cols[2] || '（内容なし）';
@@ -82,14 +92,12 @@ function parseData(text: string): ParsedRow[] {
     const midCat = cols[6] || '';
     const isTransfer = cols[8] === '1';
 
-    // 日付パース
     const dateParts = dateStr.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
     if (!dateParts) continue;
     const year = parseInt(dateParts[1]);
     const month = parseInt(dateParts[2]);
     const day = parseInt(dateParts[3]);
 
-    // 金額パース
     const rawAmount = parseFloat(amountStr.replace(/,/g, '').replace(/[^\d\-\.]/g, ''));
     if (isNaN(rawAmount)) continue;
 
@@ -114,14 +122,40 @@ function parseData(text: string): ParsedRow[] {
       type,
       category,
       subcategory,
-      // 計算対象=1 かつ 振替でないものをデフォルト選択
       selected: calcTarget === '1' && !isTransfer,
       isTransfer,
-      isExcluded: calcTarget === '0'
+      isExcluded: calcTarget === '0',
+      isDuplicate: false,
+      isNearDuplicate: false,
+      autoExcluded: false,
     });
   }
 
   return results;
+}
+
+function detectDuplicates(rows: ParsedRow[], existing: Transaction[]): ParsedRow[] {
+  const transferWords = ['振替', '口座振替', '引き落とし'];
+  return rows.map(row => {
+    const exactMatch = existing.find(t =>
+      t.year === row.year && t.month === row.month && t.day === row.day &&
+      t.amount === row.amount && t.itemName === row.content
+    );
+    if (exactMatch) {
+      return { ...row, isDuplicate: true, selected: false };
+    }
+
+    const nearMatch = existing.find(t =>
+      t.year === row.year && t.month === row.month && t.day === row.day &&
+      t.amount === row.amount && t.itemName !== row.content
+    );
+    if (nearMatch) {
+      return { ...row, isNearDuplicate: true, nearDuplicateInfo: `既存: ${nearMatch.itemName}`, userExcludeDecision: undefined };
+    }
+
+    const autoExclude = transferWords.some(w => row.subcategory.includes(w) || row.category.includes(w));
+    return { ...row, autoExcluded: autoExclude };
+  });
 }
 
 interface Props {
@@ -129,13 +163,19 @@ interface Props {
 }
 
 export default function MoneyForwardImport({ onClose }: Props) {
-  const { currentProfile, addTransaction } = useApp();
+  const { currentProfile, addTransaction, transactions } = useApp();
   const [step, setStep] = useState<'input' | 'preview'>('input');
   const [csvText, setCsvText] = useState('');
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [importing, setImporting] = useState(false);
   const [done, setDone] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [showHistoryWarning, setShowHistoryWarning] = useState(false);
+  const [historyWarningText, setHistoryWarningText] = useState('');
+  const [parsedPeriod, setParsedPeriod] = useState<{ start: string; end: string } | null>(null);
+  const [importedCount, setImportedCount] = useState(0);
+  const [skippedDuplicates, setSkippedDuplicates] = useState(0);
+  const [autoExcludedCount, setAutoExcludedCount] = useState(0);
 
   function handleParse() {
     const parsed = parseData(csvText);
@@ -143,8 +183,41 @@ export default function MoneyForwardImport({ onClose }: Props) {
       alert('データを読み取れませんでした。マネーフォワードMEのデータを貼り付けてください。');
       return;
     }
-    setRows(parsed);
-    setStep('preview');
+
+    const withDups = detectDuplicates(parsed, transactions);
+    setRows(withDups);
+
+    // Detect period
+    const dates = withDups.map(r => r.year * 100 + r.month);
+    const minDate = Math.min(...dates);
+    const maxDate = Math.max(...dates);
+    const periodStart = `${Math.floor(minDate / 100)}-${minDate % 100}`;
+    const periodEnd = `${Math.floor(maxDate / 100)}-${maxDate % 100}`;
+    setParsedPeriod({ start: periodStart, end: periodEnd });
+
+    // Check import history for overlap
+    const histories = loadImportHistories();
+    const startVal = minDate;
+    const endVal = maxDate;
+
+    const overlapping = histories.find(h => {
+      const [hy1, hm1] = h.periodStart.split('-').map(Number);
+      const [hy2, hm2] = h.periodEnd.split('-').map(Number);
+      const hStart = hy1 * 100 + hm1;
+      const hEnd = hy2 * 100 + hm2;
+      return startVal <= hEnd && endVal >= hStart;
+    });
+
+    if (overlapping) {
+      const [sy, sm] = overlapping.periodStart.split('-').map(Number);
+      const [ey, em] = overlapping.periodEnd.split('-').map(Number);
+      setHistoryWarningText(
+        `この期間（${Math.floor(minDate / 100)}年${minDate % 100}月〜${Math.floor(maxDate / 100)}年${maxDate % 100}月）は既に取込済みです（${sy}年${sm}月〜${ey}年${em}月）。続けますか？`
+      );
+      setShowHistoryWarning(true);
+    } else {
+      setStep('preview');
+    }
   }
 
   function toggleRow(i: number) {
@@ -155,10 +228,32 @@ export default function MoneyForwardImport({ onClose }: Props) {
     setRows(prev => prev.map(r => ({ ...r, selected: val })));
   }
 
+  function setRowDecision(i: number, decision: 'import' | 'skip') {
+    setRows(prev => prev.map((r, idx) => idx === i ? { ...r, userExcludeDecision: decision, selected: decision === 'import' } : r));
+  }
+
   async function handleImport() {
     if (!currentProfile) return;
     setImporting(true);
-    for (const row of rows.filter(r => r.selected)) {
+
+    let imported = 0;
+    let skipped = 0;
+    let autoEx = 0;
+
+    // Count exact duplicates skipped
+    skipped = rows.filter(r => r.isDuplicate).length;
+    // Count near-duplicates skipped (no decision or skipped)
+    skipped += rows.filter(r => r.isNearDuplicate && r.userExcludeDecision === 'skip').length;
+
+    const toImport = rows.filter(r => {
+      if (r.isDuplicate) return false;
+      if (r.isNearDuplicate) return r.userExcludeDecision === 'import';
+      return r.selected;
+    });
+
+    for (const row of toImport) {
+      const isAutoExcluded = row.autoExcluded;
+      if (isAutoExcluded) autoEx++;
       addTransaction({
         profileId: currentProfile.id,
         year: row.year,
@@ -169,12 +264,31 @@ export default function MoneyForwardImport({ onClose }: Props) {
         subcategory: row.subcategory,
         itemName: row.content,
         amount: row.amount,
-        note: 'MF取込'
+        note: 'MF取込',
+        excluded: isAutoExcluded ? true : undefined,
+      });
+      imported++;
+    }
+
+    setImportedCount(imported);
+    setSkippedDuplicates(skipped);
+    setAutoExcludedCount(autoEx);
+
+    if (parsedPeriod) {
+      saveImportHistory({
+        id: uuidv4(),
+        importedAt: new Date().toISOString(),
+        periodStart: parsedPeriod.start,
+        periodEnd: parsedPeriod.end,
+        count: imported,
+        skippedDuplicates: skipped,
+        autoExcluded: autoEx,
       });
     }
+
     setImporting(false);
     setDone(true);
-    setTimeout(() => onClose(), 1500);
+    setTimeout(() => onClose(), 2500);
   }
 
   const TYPE_LABEL: Record<TransactionType, string> = { income: '収入', expense: '支出', investment: '投資' };
@@ -189,9 +303,11 @@ export default function MoneyForwardImport({ onClose }: Props) {
     investment: 'text-blue-600'
   };
 
-  const displayRows = showAll ? rows : rows.filter(r => !r.isTransfer && !r.isExcluded);
+  const displayRows = showAll ? rows : rows.filter(r => !r.isTransfer && !r.isExcluded && !r.isDuplicate);
   const selectedCount = rows.filter(r => r.selected).length;
   const hiddenCount = rows.filter(r => r.isTransfer || r.isExcluded).length;
+  const duplicateCount = rows.filter(r => r.isDuplicate).length;
+  const nearDupRows = rows.filter(r => r.isNearDuplicate);
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
@@ -215,7 +331,25 @@ export default function MoneyForwardImport({ onClose }: Props) {
             <div className="text-center py-12">
               <div className="text-5xl mb-4">✅</div>
               <p className="text-lg font-bold text-gray-800">取込完了！</p>
-              <p className="text-sm text-gray-500 mt-1">{selectedCount}件を追加しました</p>
+              <p className="text-sm text-gray-500 mt-1">{importedCount}件を取込みました</p>
+              {skippedDuplicates > 0 && (
+                <p className="text-sm text-amber-600 mt-1">{skippedDuplicates}件の重複をスキップしました</p>
+              )}
+              {autoExcludedCount > 0 && (
+                <p className="text-sm text-orange-500 mt-1">{autoExcludedCount}件を集計対象外に設定しました</p>
+              )}
+            </div>
+
+          ) : showHistoryWarning ? (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+              <p className="text-sm font-semibold text-amber-800">⚠️ 取込済み期間の重複</p>
+              <p className="text-sm text-amber-700">{historyWarningText}</p>
+              <div className="flex gap-2">
+                <button onClick={() => { setShowHistoryWarning(false); setStep('preview'); }}
+                  className="flex-1 py-2 bg-amber-600 text-white text-sm rounded-xl">続けて取込む</button>
+                <button onClick={() => setShowHistoryWarning(false)}
+                  className="flex-1 py-2 border border-gray-300 text-sm rounded-xl">キャンセル</button>
+              </div>
             </div>
 
           ) : step === 'input' ? (
@@ -270,12 +404,50 @@ export default function MoneyForwardImport({ onClose }: Props) {
                 )}
               </div>
 
+              {/* 完全重複サマリー */}
+              {duplicateCount > 0 && (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 text-xs text-gray-600">
+                  🔄 {duplicateCount}件の完全重複を自動スキップします
+                </div>
+              )}
+
+              {/* 疑似重複セクション */}
+              {nearDupRows.length > 0 && (
+                <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 space-y-2">
+                  <p className="text-xs font-semibold text-amber-800">⚠️ 重複の可能性があります（{nearDupRows.length}件）</p>
+                  {nearDupRows.map((row) => {
+                    const originalIndex = rows.indexOf(row);
+                    return (
+                      <div key={originalIndex} className="bg-white rounded-lg p-2 border border-amber-200">
+                        <div className="flex justify-between items-start mb-1">
+                          <div>
+                            <p className="text-xs font-medium text-gray-800">{row.content}</p>
+                            <p className="text-xs text-gray-500">{row.date} · {row.amount.toLocaleString()}円</p>
+                            <p className="text-xs text-amber-700">{row.nearDuplicateInfo}</p>
+                          </div>
+                          <div className="flex gap-1 ml-2">
+                            <button
+                              onClick={() => setRowDecision(originalIndex, 'import')}
+                              className={`text-xs px-2 py-1 rounded ${row.userExcludeDecision === 'import' ? 'bg-indigo-600 text-white' : 'border border-indigo-300 text-indigo-600'}`}
+                            >取込む</button>
+                            <button
+                              onClick={() => setRowDecision(originalIndex, 'skip')}
+                              className={`text-xs px-2 py-1 rounded ${row.userExcludeDecision === 'skip' ? 'bg-gray-600 text-white' : 'border border-gray-300 text-gray-600'}`}
+                            >スキップ</button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
               <div className="space-y-1">
-                {displayRows.map((row, i) => {
+                {displayRows.map((row) => {
                   const originalIndex = rows.indexOf(row);
                   return (
                     <label
-                      key={i}
+                      key={originalIndex}
                       className={`flex items-center gap-3 p-2.5 rounded-lg cursor-pointer border transition-colors ${
                         row.selected
                           ? 'border-indigo-200 bg-indigo-50/40'
@@ -296,6 +468,7 @@ export default function MoneyForwardImport({ onClose }: Props) {
                           <span className="text-xs text-gray-400">{row.date}</span>
                           {row.isTransfer && <span className="text-xs text-gray-400 bg-gray-100 px-1 rounded">振替</span>}
                           {row.isExcluded && <span className="text-xs text-gray-400 bg-gray-100 px-1 rounded">計算対象外</span>}
+                          {row.autoExcluded && <span className="text-xs text-orange-500 bg-orange-50 px-1 rounded">集計対象外</span>}
                         </div>
                         <p className="text-sm font-medium text-gray-800 truncate">{row.content}</p>
                         <p className="text-xs text-gray-500 truncate">{row.category} ／ {row.subcategory}</p>
@@ -312,7 +485,7 @@ export default function MoneyForwardImport({ onClose }: Props) {
         </div>
 
         {/* フッター */}
-        {!done && (
+        {!done && !showHistoryWarning && (
           <div className="px-4 py-3 border-t border-gray-100 flex gap-3 shrink-0">
             {step === 'input' ? (
               <>

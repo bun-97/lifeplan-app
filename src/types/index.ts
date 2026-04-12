@@ -19,6 +19,17 @@ export interface Transaction {
   expenseType?: '毎月固定' | '毎月変動' | '不定期固定' | '不定期変動';
   budgetType?: '予算内' | '予算外';
   member?: string;
+  excluded?: boolean;
+}
+
+export interface ImportHistory {
+  id: string;
+  importedAt: string;
+  periodStart: string; // "YYYY-M" format
+  periodEnd: string;   // "YYYY-M" format
+  count: number;
+  skippedDuplicates: number;
+  autoExcluded: number;
 }
 
 export interface Budget {
