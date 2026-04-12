@@ -42,7 +42,7 @@ const defaultEventForm: EventForm = {
 };
 
 export default function LifePlan() {
-  const { currentProfile, updateProfile, lifeEvents, addLifeEvent, updateLifeEvent, deleteLifeEvent, transactions, budgets } = useApp();
+  const { currentProfile, updateProfile, lifeEvents, addLifeEvent, updateLifeEvent, transactions, budgets } = useApp();
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
   const [memberForm, setMemberForm] = useState<MemberForm>(defaultMemberForm);
@@ -71,17 +71,6 @@ export default function LifePlan() {
     setEditingMemberId(null);
   }
 
-  function handleDeleteMember(id: string) {
-    if (!currentProfile) return;
-    updateProfile({ ...currentProfile, members: members.filter(m => m.id !== id) });
-  }
-
-  function openEditMember(member: FamilyMember) {
-    setMemberForm({ name: member.name, birthYear: member.birthYear, relation: member.relation });
-    setEditingMemberId(member.id);
-    setShowMemberModal(true);
-  }
-
   function handleAddEvent() {
     if (!eventForm.title.trim() || !currentProfile) return;
     const eventData = {
@@ -100,18 +89,6 @@ export default function LifePlan() {
     setShowEventModal(false);
     setEventForm(defaultEventForm);
     setEditingEventId(null);
-  }
-
-  function openEditEvent(event: LifeEvent) {
-    setEventForm({
-      year: event.year,
-      title: event.title,
-      description: event.description || '',
-      amount: event.amount ? String(event.amount) : '',
-      memberId: event.memberId || ''
-    });
-    setEditingEventId(event.id);
-    setShowEventModal(true);
   }
 
   // Cash flow per year (from budgets + actuals)
@@ -175,105 +152,27 @@ export default function LifePlan() {
   return (
     <div className="p-4 w-full space-y-4">
 
-      {/* ===== FAMILY MEMBERS ===== */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">家族メンバー</h2>
-          <button
-            onClick={() => { setMemberForm(defaultMemberForm); setEditingMemberId(null); setShowMemberModal(true); }}
-            className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors flex items-center gap-1"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            メンバーを追加
-          </button>
-        </div>
-        {members.length === 0 ? (
-          <div className="bg-white rounded-xl p-6 text-center shadow-sm border border-gray-100">
-            <p className="text-gray-400 text-sm">メンバーが登録されていません</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {members.map(member => (
-              <div key={member.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-gray-800">{member.name}</span>
-                    <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">{member.relation}</span>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-0.5">生年: {member.birthYear}年 · 現在 {new Date().getFullYear() - member.birthYear}歳</p>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => openEditMember(member)} className="text-gray-400 hover:text-indigo-500 p-1.5">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
-                    </svg>
-                  </button>
-                  <button onClick={() => handleDeleteMember(member.id)} className="text-gray-400 hover:text-red-500 p-1.5">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+      {/* ===== FAMILY MEMBERS & EVENTS: buttons only ===== */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => { setMemberForm(defaultMemberForm); setEditingMemberId(null); setShowMemberModal(true); }}
+          className="flex-1 bg-indigo-600 text-white px-3 py-2.5 rounded-xl text-sm font-medium hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1.5"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          メンバーを追加
+        </button>
+        <button
+          onClick={() => { setEventForm(defaultEventForm); setEditingEventId(null); setShowEventModal(true); }}
+          className="flex-1 bg-purple-600 text-white px-3 py-2.5 rounded-xl text-sm font-medium hover:bg-purple-700 transition-colors flex items-center justify-center gap-1.5"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          イベントを追加
+        </button>
       </div>
-
-      {/* ===== LIFE EVENTS ===== */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">ライフイベント</h2>
-          <button
-            onClick={() => { setEventForm(defaultEventForm); setEditingEventId(null); setShowEventModal(true); }}
-            className="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-purple-700 transition-colors flex items-center gap-1"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            イベントを追加
-          </button>
-        </div>
-        {lifeEvents.length === 0 ? (
-          <div className="bg-white rounded-xl p-6 text-center shadow-sm border border-gray-100">
-            <p className="text-gray-400 text-sm">イベントが登録されていません</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {lifeEvents.sort((a, b) => a.year - b.year).map(event => {
-              const memberName = event.memberId ? members.find(m => m.id === event.memberId)?.name || '全員' : '全員';
-              return (
-                <div key={event.id} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">{event.year}年</span>
-                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{memberName}</span>
-                      <span className="text-sm font-semibold text-gray-800">{event.title}</span>
-                    </div>
-                    {event.description && <p className="text-xs text-gray-500 mt-1">{event.description}</p>}
-                    {event.amount && <p className="text-xs text-indigo-600 mt-0.5 font-medium">予算: {event.amount.toLocaleString()}円</p>}
-                  </div>
-                  <div className="flex items-center gap-1 ml-2 shrink-0">
-                    <button onClick={() => openEditEvent(event)} className="text-gray-400 hover:text-indigo-500 p-1">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
-                      </svg>
-                    </button>
-                    <button onClick={() => deleteLifeEvent(event.id)} className="text-gray-400 hover:text-red-500 p-1">
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
       {/* ===== CASHFLOW TABLE ===== */}
       <div className="space-y-3">
         <h2 className="text-sm font-semibold text-gray-700">キャッシュフロー表 (2025〜2060)</h2>

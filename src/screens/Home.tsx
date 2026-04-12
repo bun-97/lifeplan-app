@@ -63,9 +63,10 @@ export default function Home() {
         {avgRate === null ? (
           <p className="text-4xl font-bold text-gray-300">データなし</p>
         ) : (
-          <p className={`text-6xl font-bold ${avgRate >= 80 ? 'text-red-500' : 'text-gray-800'}`}>
-            {avgRate}%
-          </p>
+          <div className={`flex items-end justify-center gap-1 ${avgRate >= 80 ? 'text-red-500' : 'text-gray-800'}`}>
+            <span className="text-6xl font-bold leading-none">{avgRate}</span>
+            <span className="text-3xl font-semibold leading-none mb-1">%</span>
+          </div>
         )}
         <p className="text-xs text-gray-400 mt-2">
           {monthsWithData.length > 0 ? `${monthsWithData.length}か月分のデータ` : 'まだデータがありません'}
