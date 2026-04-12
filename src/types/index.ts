@@ -7,6 +7,7 @@ export interface Transaction {
   profileId: string;
   year: number;
   month: number;
+  day?: number;
   type: TransactionType;
   category: string;
   subcategory: string;

@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { TransactionType } from '../types';
+import { getCategoryRules } from '../lib/categoryRules';
 
 interface ParsedRow {
   date: string;
   year: number;
   month: number;
+  day: number;
   content: string;
   amount: number;
   type: TransactionType;
@@ -85,23 +87,33 @@ function parseData(text: string): ParsedRow[] {
     if (!dateParts) continue;
     const year = parseInt(dateParts[1]);
     const month = parseInt(dateParts[2]);
+    const day = parseInt(dateParts[3]);
 
     // 金額パース
     const rawAmount = parseFloat(amountStr.replace(/,/g, '').replace(/[^\d\-\.]/g, ''));
     if (isNaN(rawAmount)) continue;
 
-    const type = detectType(bigCat, midCat, rawAmount);
-    const category = detectCategory(type, bigCat, midCat);
+    let type = detectType(bigCat, midCat, rawAmount);
+    let category = detectCategory(type, bigCat, midCat);
+    let subcategory = midCat || bigCat || '';
+
+    const rule = getCategoryRules()[content];
+    if (rule) {
+      type = rule.type;
+      category = rule.category;
+      subcategory = rule.subcategory;
+    }
 
     results.push({
       date: dateStr,
       year,
       month,
+      day,
       content,
       amount: Math.abs(rawAmount),
       type,
       category,
-      subcategory: midCat || bigCat || '',
+      subcategory,
       // 計算対象=1 かつ 振替でないものをデフォルト選択
       selected: calcTarget === '1' && !isTransfer,
       isTransfer,
@@ -151,6 +163,7 @@ export default function MoneyForwardImport({ onClose }: Props) {
         profileId: currentProfile.id,
         year: row.year,
         month: row.month,
+        day: row.day,
         type: row.type,
         category: row.category,
         subcategory: row.subcategory,

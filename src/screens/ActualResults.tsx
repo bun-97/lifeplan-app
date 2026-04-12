@@ -1,45 +1,41 @@
 import { useState, useMemo } from 'react';
-import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { useApp } from '../contexts/AppContext';
 import { Transaction, TransactionType } from '../types';
 import MoneyForwardImport from '../components/MoneyForwardImport';
+import { saveCategoryRule, getCategoryRules } from '../lib/categoryRules';
 
 const EXPENSE_CATEGORIES = ['毎月固定費', '毎月変動費', '不定期固定費', '不定期変動費'];
 const INCOME_CATEGORIES = ['予算内', '予算外'];
 const INVESTMENT_CATEGORIES = ['積立投資', '定期預金', 'その他'];
 
-// マネーフォワードMEに合わせた中項目カラーマッピング
 const MF_CATEGORY_COLORS: Record<string, string> = {
-  // 食費
   '食費': '#E94B3C', '外食': '#E94B3C', '食料品': '#E94B3C',
-  // 日用品
   '日用品': '#8BC34A', 'スキンケア用品': '#8BC34A', '雑費': '#8BC34A',
-  // 交際費・娯楽
   '交際費': '#42A5F5', '娯楽費': '#5C6BC0', '家族交際費': '#42A5F5',
-  // 住宅
   'サブスク': '#26A65B', '通信費': '#00ACC1', 'ローン返済': '#26A65B',
   '税金': '#78909C', '光熱費': '#00897B',
-  // 自動車
   'ガソリン': '#546E7A', '自動車保険': '#546E7A', '駐車場': '#607D8B',
-  // 投資
   '株式投資': '#37474F', '積立投資': '#37474F', '定期預金': '#455A64',
-  // 収入
   '給与': '#1E88E5', '利子所得': '#29B6F6', '共有NISA積立分': '#0288D1',
-  // その他
   '事業投資': '#8D6E63', 'その他': '#90A4AE',
 };
+const CHART_COLORS = ['#E94B3C','#26A65B','#42A5F5','#546E7A','#8BC34A','#5C6BC0','#00ACC1','#78909C','#37474F','#FF7043'];
 
-const CHART_COLORS = [
-  '#E94B3C', '#26A65B', '#42A5F5', '#546E7A', '#8BC34A',
-  '#5C6BC0', '#00ACC1', '#78909C', '#37474F', '#FF7043'
-];
-
-function getCategoryColor(subcategory: string, index: number): string {
-  return MF_CATEGORY_COLORS[subcategory] ?? CHART_COLORS[index % CHART_COLORS.length];
+function getCategoryColor(name: string, index: number): string {
+  return MF_CATEGORY_COLORS[name] ?? CHART_COLORS[index % CHART_COLORS.length];
 }
 
-function formatAmount(n: number): string {
+function fmt(n: number): string { return n.toLocaleString('ja-JP') + '円'; }
+function fmtShort(n: number): string {
+  if (n >= 10000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + '万円';
   return n.toLocaleString('ja-JP') + '円';
+}
+
+function getCategoriesForType(type: TransactionType): string[] {
+  if (type === 'income') return INCOME_CATEGORIES;
+  if (type === 'expense') return EXPENSE_CATEGORIES;
+  return INVESTMENT_CATEGORIES;
 }
 
 interface FormState {
@@ -50,24 +46,18 @@ interface FormState {
   amount: string;
   note: string;
 }
+const defaultForm: FormState = { type: 'expense', category: '毎月固定費', subcategory: '', itemName: '', amount: '', note: '' };
 
-const defaultForm: FormState = {
-  type: 'expense',
-  category: '毎月固定費',
-  subcategory: '',
-  itemName: '',
-  amount: '',
-  note: ''
-};
-
-function getCategoriesForType(type: TransactionType): string[] {
-  if (type === 'income') return INCOME_CATEGORIES;
-  if (type === 'expense') return EXPENSE_CATEGORIES;
-  return INVESTMENT_CATEGORIES;
+// Category change modal state
+interface ReclassifyState {
+  tx: Transaction;
+  type: TransactionType;
+  category: string;
+  subcategory: string;
 }
 
 export default function ActualResults() {
-  const { currentProfile, transactions, addTransaction, deleteTransaction } = useApp();
+  const { currentProfile, transactions, addTransaction, updateTransaction, deleteTransaction } = useApp();
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
@@ -75,94 +65,83 @@ export default function ActualResults() {
   const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState<FormState>(defaultForm);
   const [editingId, setEditingId] = useState<string | null>(null);
-
-  const { updateTransaction } = useApp();
+  const [pieTab, setPieTab] = useState<'expense' | 'income'>('expense');
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [reclassify, setReclassify] = useState<ReclassifyState | null>(null);
+  const [applyToAll, setApplyToAll] = useState(false);
 
   const monthlyTx = useMemo(
     () => transactions.filter(t => t.year === selectedYear && t.month === selectedMonth),
     [transactions, selectedYear, selectedMonth]
   );
 
-  const totalIncome = useMemo(
-    () => monthlyTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0),
-    [monthlyTx]
-  );
-  const totalExpense = useMemo(
-    () => monthlyTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0),
-    [monthlyTx]
-  );
-  const totalInvestment = useMemo(
-    () => monthlyTx.filter(t => t.type === 'investment').reduce((s, t) => s + t.amount, 0),
-    [monthlyTx]
-  );
+  const totalIncome = useMemo(() => monthlyTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0), [monthlyTx]);
+  const totalExpense = useMemo(() => monthlyTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0), [monthlyTx]);
+  const totalInvestment = useMemo(() => monthlyTx.filter(t => t.type === 'investment').reduce((s, t) => s + t.amount, 0), [monthlyTx]);
   const balance = totalIncome - totalExpense - totalInvestment;
   const expenseRate = totalIncome > 0 ? Math.round(totalExpense / totalIncome * 100) : 0;
 
-  // Annual data for summary
-  const annualTx = useMemo(
-    () => transactions.filter(t => t.year === selectedYear),
-    [transactions, selectedYear]
-  );
+  // Annual
+  const annualTx = useMemo(() => transactions.filter(t => t.year === selectedYear), [transactions, selectedYear]);
+  const monthsWithData = useMemo(() => { const s = new Set(annualTx.map(t => t.month)); return s.size || 1; }, [annualTx]);
   const annualIncome = annualTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const annualExpense = annualTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
 
-  // Monthly averages (only months that have data)
-  const monthsWithData = useMemo(() => {
-    const months = new Set(annualTx.map(t => t.month));
-    return months.size || 1;
-  }, [annualTx]);
-
-  const avgMonthlyIncome = Math.round(annualIncome / monthsWithData);
-  const avgMonthlyExpense = Math.round(annualExpense / monthsWithData);
-
-  // Pie chart data
-  const pieData = useMemo(() => {
+  // Pie data
+  const expensePieData = useMemo(() => {
     const map: Record<string, number> = {};
-    monthlyTx.filter(t => t.type === 'expense').forEach(t => {
-      const key = t.subcategory || t.category;
-      map[key] = (map[key] || 0) + t.amount;
-    });
-    return Object.entries(map).map(([name, value]) => ({ name, value }));
+    monthlyTx.filter(t => t.type === 'expense').forEach(t => { const k = t.subcategory || t.category; map[k] = (map[k] || 0) + t.amount; });
+    return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [monthlyTx]);
 
-  function prevMonth() {
-    if (selectedMonth === 1) {
-      setSelectedMonth(12);
-      setSelectedYear(y => y - 1);
-    } else {
-      setSelectedMonth(m => m - 1);
-    }
-  }
+  const incomePieData = useMemo(() => {
+    const map: Record<string, number> = {};
+    monthlyTx.filter(t => t.type === 'income').forEach(t => { const k = t.subcategory || t.category; map[k] = (map[k] || 0) + t.amount; });
+    return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+  }, [monthlyTx]);
 
-  function nextMonth() {
-    if (selectedMonth === 12) {
-      setSelectedMonth(1);
-      setSelectedYear(y => y + 1);
-    } else {
-      setSelectedMonth(m => m + 1);
-    }
-  }
+  const activePieData = pieTab === 'expense' ? expensePieData : incomePieData;
+  const activePieTotal = activePieData.reduce((s, d) => s + d.value, 0);
 
-  function handleTypeChange(type: TransactionType) {
-    const cats = getCategoriesForType(type);
-    setForm(f => ({ ...f, type, category: cats[0] }));
-  }
-
-  function openAdd() {
-    setForm(defaultForm);
-    setEditingId(null);
-    setShowModal(true);
-  }
-
-  function openEdit(tx: Transaction) {
-    setForm({
-      type: tx.type,
-      category: tx.category,
-      subcategory: tx.subcategory,
-      itemName: tx.itemName,
-      amount: String(tx.amount),
-      note: tx.note || ''
+  // Grouped transactions: by type → by subcategory
+  const groupedTx = useMemo(() => {
+    const result: { type: TransactionType; subcategory: string; total: number; items: Transaction[] }[] = [];
+    const types: TransactionType[] = ['income', 'expense', 'investment'];
+    types.forEach(type => {
+      const typeTx = monthlyTx.filter(t => t.type === type);
+      const subMap: Record<string, Transaction[]> = {};
+      typeTx.forEach(t => {
+        const k = t.subcategory || t.category;
+        if (!subMap[k]) subMap[k] = [];
+        subMap[k].push(t);
+      });
+      Object.entries(subMap).forEach(([subcategory, items]) => {
+        result.push({ type, subcategory, total: items.reduce((s, t) => s + t.amount, 0), items: items.sort((a, b) => (b.day || 0) - (a.day || 0)) });
+      });
     });
+    return result.sort((a, b) => b.total - a.total);
+  }, [monthlyTx]);
+
+  function toggleGroup(key: string) {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
+
+  function prevMonth() {
+    if (selectedMonth === 1) { setSelectedMonth(12); setSelectedYear(y => y - 1); }
+    else setSelectedMonth(m => m - 1);
+  }
+  function nextMonth() {
+    if (selectedMonth === 12) { setSelectedMonth(1); setSelectedYear(y => y + 1); }
+    else setSelectedMonth(m => m + 1);
+  }
+
+  function openAdd() { setForm(defaultForm); setEditingId(null); setShowModal(true); }
+  function openEdit(tx: Transaction) {
+    setForm({ type: tx.type, category: tx.category, subcategory: tx.subcategory, itemName: tx.itemName, amount: String(tx.amount), note: tx.note || '' });
     setEditingId(tx.id);
     setShowModal(true);
   }
@@ -171,377 +150,283 @@ export default function ActualResults() {
     if (!form.subcategory.trim() || !form.itemName.trim() || !form.amount) return;
     const amount = Number(form.amount);
     if (isNaN(amount) || amount <= 0) return;
-
     if (editingId) {
       const existing = transactions.find(t => t.id === editingId);
-      if (existing) {
-        updateTransaction({
-          ...existing,
-          type: form.type,
-          category: form.category,
-          subcategory: form.subcategory,
-          itemName: form.itemName,
-          amount,
-          note: form.note || undefined
-        });
-      }
+      if (existing) updateTransaction({ ...existing, type: form.type, category: form.category, subcategory: form.subcategory, itemName: form.itemName, amount, note: form.note || undefined });
     } else {
       if (!currentProfile) return;
-      addTransaction({
-        profileId: currentProfile.id,
-        year: selectedYear,
-        month: selectedMonth,
-        type: form.type,
-        category: form.category,
-        subcategory: form.subcategory,
-        itemName: form.itemName,
-        amount,
-        note: form.note || undefined
-      });
+      addTransaction({ profileId: currentProfile.id, year: selectedYear, month: selectedMonth, type: form.type, category: form.category, subcategory: form.subcategory, itemName: form.itemName, amount, note: form.note || undefined });
     }
-    setShowModal(false);
-    setForm(defaultForm);
-    setEditingId(null);
+    setShowModal(false); setForm(defaultForm); setEditingId(null);
   }
 
-  if (!currentProfile) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-gray-500">プロファイルを作成してください</p>
-      </div>
-    );
+  function openReclassify(tx: Transaction) {
+    setReclassify({ tx, type: tx.type, category: tx.category, subcategory: tx.subcategory });
+    setApplyToAll(false);
   }
 
-  const typeLabel: Record<TransactionType, string> = {
-    income: '収入',
-    expense: '支出',
-    investment: '投資・貯蓄'
-  };
+  function handleReclassify() {
+    if (!reclassify) return;
+    const { tx, type, category, subcategory } = reclassify;
+    const update = (t: Transaction) => updateTransaction({ ...t, type, category, subcategory });
+    update(tx);
+    if (applyToAll) {
+      transactions.filter(t => t.itemName === tx.itemName && t.id !== tx.id).forEach(update);
+      saveCategoryRule(tx.itemName, { type, category, subcategory });
+    }
+    setReclassify(null);
+  }
 
-  const typeColor: Record<TransactionType, string> = {
+  const typeAmountColor: Record<TransactionType, string> = {
     income: 'text-blue-600',
     expense: 'text-red-500',
-    investment: 'text-blue-500'
+    investment: 'text-gray-700',
   };
 
-  const typeBg: Record<TransactionType, string> = {
-    income: 'bg-emerald-50 border-emerald-200',
-    expense: 'bg-red-50 border-red-200',
-    investment: 'bg-blue-50 border-blue-200'
+  const typeLabelColor: Record<TransactionType, string> = {
+    income: 'text-blue-500',
+    expense: 'text-red-400',
+    investment: 'text-gray-500',
   };
 
-  const grouped: Record<string, Transaction[]> = {};
-  (['income', 'expense', 'investment'] as TransactionType[]).forEach(type => {
-    const items = monthlyTx.filter(t => t.type === type);
-    if (items.length > 0) grouped[type] = items;
-  });
+  const typeLabel: Record<TransactionType, string> = { income: '収入', expense: '支出', investment: '投資・貯蓄' };
+
+  if (!currentProfile) return <div className="flex items-center justify-center h-64"><p className="text-gray-500">プロファイルを作成してください</p></div>;
 
   return (
-    <div className="p-4 max-w-2xl mx-auto space-y-4">
-      {/* Month navigation */}
-      <div className="flex items-center justify-between bg-white rounded-xl p-3 shadow-sm border border-gray-100">
-        <button onClick={prevMonth} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-          </svg>
-        </button>
-        <span className="text-base font-semibold text-gray-800">
-          {selectedYear}年 {selectedMonth}月
-        </span>
-        <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-          </svg>
-        </button>
-      </div>
+    <div className="max-w-2xl mx-auto">
 
-      {/* Alert */}
-      {totalIncome > 0 && totalExpense / totalIncome > 0.8 && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-3 flex items-center gap-2">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-red-500 shrink-0">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-          </svg>
-          <p className="text-sm text-red-700">支出が収入の{Math.round(totalExpense / totalIncome * 100)}%に達しています。予算を見直しましょう。</p>
+      {/* ===== TOP HEADER SECTION ===== */}
+      <div className="bg-white border-b border-gray-100 px-4 pt-4 pb-3">
+        {/* Month navigation */}
+        <div className="flex items-center justify-center gap-4 mb-2">
+          <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+            </svg>
+          </button>
+          <span className="text-base font-bold text-gray-800">{selectedYear}年{selectedMonth}月</span>
+          <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+            </svg>
+          </button>
         </div>
-      )}
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-          <p className="text-xs text-gray-500 mb-1">収入合計</p>
-          <p className="text-lg font-bold text-blue-600">{formatAmount(totalIncome)}</p>
-        </div>
-        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-          <p className="text-xs text-gray-500 mb-1">支出合計</p>
-          <p className="text-lg font-bold text-red-500">{formatAmount(totalExpense)}</p>
-        </div>
-        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-          <p className="text-xs text-gray-500 mb-1">投資・貯蓄</p>
-          <p className="text-lg font-bold text-blue-500">{formatAmount(totalInvestment)}</p>
-        </div>
-        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-          <p className="text-xs text-gray-500 mb-1">収支バランス</p>
-          <p className={`text-lg font-bold ${balance >= 0 ? 'text-gray-800' : 'text-red-500'}`}>
-            {balance >= 0 ? '+' : ''}{formatAmount(balance)}
+        {/* Expense rate */}
+        {totalIncome > 0 && (
+          <p className={`text-center text-sm mb-3 ${expenseRate > 80 ? 'text-red-500 font-bold' : 'text-gray-500'}`}>
+            支出率 {expenseRate}%{expenseRate > 80 ? ' ⚠️' : ''}
           </p>
+        )}
+
+        {/* 3-column summary */}
+        <div className="grid grid-cols-3 divide-x divide-gray-100">
+          <div className="text-center px-2">
+            <p className="text-xs text-gray-400 mb-0.5">収入</p>
+            <p className="text-base font-bold text-blue-600">{fmtShort(totalIncome)}</p>
+          </div>
+          <div className="text-center px-2">
+            <p className="text-xs text-gray-400 mb-0.5">支出</p>
+            <p className="text-base font-bold text-red-500">{fmtShort(totalExpense)}</p>
+          </div>
+          <div className="text-center px-2">
+            <p className="text-xs text-gray-400 mb-0.5">収支</p>
+            <p className={`text-base font-bold ${balance >= 0 ? 'text-gray-800' : 'text-red-500'}`}>
+              {balance >= 0 ? '+' : ''}{fmtShort(balance)}
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Expense rate bar */}
-      {totalIncome > 0 && (
-        <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700">今月の支出率</span>
-            <span className={`text-lg font-bold ${expenseRate > 80 ? 'text-red-500' : 'text-blue-600'}`}>
-              {expenseRate}%
-            </span>
-          </div>
-          <div className="w-full bg-gray-100 rounded-full h-3">
-            <div
-              className={`h-3 rounded-full transition-all ${expenseRate > 80 ? 'bg-red-400' : expenseRate > 60 ? 'bg-amber-400' : 'bg-emerald-400'}`}
-              style={{ width: `${Math.min(expenseRate, 100)}%` }}
-            />
-          </div>
-          <div className="flex justify-between text-xs text-gray-400 mt-1">
-            <span>0%</span>
-            <span className="text-amber-500">60%</span>
-            <span className="text-red-500">80%</span>
-            <span>100%</span>
-          </div>
-        </div>
-      )}
+      <div className="p-4 space-y-4">
 
-      {/* Add / Import buttons */}
-      <div className="flex gap-2">
-        <button
-          onClick={openAdd}
-          className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-medium hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          取引を追加
-        </button>
-        <button
-          onClick={() => setShowImport(true)}
-          className="flex-1 bg-white border border-indigo-300 text-indigo-600 py-3 rounded-xl font-medium hover:bg-indigo-50 transition-colors flex items-center justify-center gap-2"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
-          </svg>
-          MF取込
-        </button>
-      </div>
-
-      {/* Transaction list */}
-      {Object.entries(grouped).map(([type, items]) => (
-        <div key={type} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className={`px-4 py-2.5 border-b ${typeBg[type as TransactionType]}`}>
-            <span className={`text-sm font-semibold ${typeColor[type as TransactionType]}`}>
-              {typeLabel[type as TransactionType]}
-            </span>
-            <span className={`ml-2 text-sm font-bold ${typeColor[type as TransactionType]}`}>
-              {formatAmount(items.reduce((s, t) => s + t.amount, 0))}
-            </span>
-          </div>
-          {items.map(tx => (
-            <div key={tx.id} className="flex items-center px-4 py-3 border-b border-gray-50 last:border-0 hover:bg-gray-50">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full shrink-0">{tx.category}</span>
-                  <span className="text-xs text-gray-500 truncate">{tx.subcategory}</span>
-                </div>
-                <p className="text-sm font-medium text-gray-800 mt-0.5">{tx.itemName}</p>
-                {tx.note && <p className="text-xs text-gray-400 mt-0.5">{tx.note}</p>}
-              </div>
-              <div className="flex items-center gap-2 ml-2">
-                <span className={`text-sm font-semibold ${typeColor[type as TransactionType]}`}>
-                  {formatAmount(tx.amount)}
-                </span>
+        {/* ===== PIE CHART SECTION ===== */}
+        {(expensePieData.length > 0 || incomePieData.length > 0) && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            {/* Tabs */}
+            <div className="flex border-b border-gray-100">
+              {(['expense', 'income'] as const).map(tab => (
                 <button
-                  onClick={() => openEdit(tx)}
-                  className="text-gray-400 hover:text-indigo-500 p-1"
+                  key={tab}
+                  onClick={() => setPieTab(tab)}
+                  className={`flex-1 py-2.5 text-sm font-medium transition-colors ${pieTab === tab ? (tab === 'expense' ? 'text-red-500 border-b-2 border-red-500' : 'text-blue-600 border-b-2 border-blue-600') : 'text-gray-400'}`}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
-                  </svg>
+                  {tab === 'expense' ? '支出' : '収入'}
                 </button>
-                <button
-                  onClick={() => deleteTransaction(tx.id)}
-                  className="text-gray-400 hover:text-red-500 p-1"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
-                  </svg>
-                </button>
-              </div>
+              ))}
             </div>
-          ))}
-        </div>
-      ))}
 
-      {monthlyTx.length === 0 && (
-        <div className="bg-white rounded-xl p-8 text-center shadow-sm border border-gray-100">
-          <p className="text-gray-400 text-sm">この月の取引はありません</p>
-          <p className="text-gray-400 text-xs mt-1">「取引を追加」ボタンから記録しましょう</p>
-        </div>
-      )}
+            {activePieData.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie data={activePieData} dataKey="value" cx="50%" cy="50%" innerRadius={50} outerRadius={80}>
+                      {activePieData.map((entry, i) => (
+                        <Cell key={i} fill={getCategoryColor(entry.name, i)} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v: number) => fmt(v)} />
+                  </PieChart>
+                </ResponsiveContainer>
 
-      {/* Pie chart */}
-      {pieData.length > 0 && (
+                {/* Category list */}
+                <div className="divide-y divide-gray-50 pb-1">
+                  {activePieData.map((item, i) => {
+                    const pct = activePieTotal > 0 ? Math.round(item.value / activePieTotal * 100) : 0;
+                    const color = getCategoryColor(item.name, i);
+                    return (
+                      <div key={item.name} className="flex items-center px-4 py-2 gap-3">
+                        <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                        <span className="text-sm text-gray-700 flex-1">{item.name}</span>
+                        <span className="text-xs text-gray-400 w-8 text-right">{pct}%</span>
+                        <span className={`text-sm font-semibold w-24 text-right ${pieTab === 'expense' ? 'text-red-500' : 'text-blue-600'}`}>{fmt(item.value)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <p className="text-center text-gray-400 text-sm py-8">データがありません</p>
+            )}
+          </div>
+        )}
+
+        {/* ===== ACTION BUTTONS ===== */}
+        <div className="flex gap-2">
+          <button onClick={openAdd} className="flex-1 bg-indigo-600 text-white py-3 rounded-xl font-medium hover:bg-indigo-700 flex items-center justify-center gap-2 text-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+            取引を追加
+          </button>
+          <button onClick={() => setShowImport(true)} className="flex-1 bg-white border border-indigo-300 text-indigo-600 py-3 rounded-xl font-medium hover:bg-indigo-50 flex items-center justify-center gap-2 text-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" /></svg>
+            MF取込
+          </button>
+        </div>
+
+        {/* ===== GROUPED TRANSACTION LIST ===== */}
+        {groupedTx.length === 0 ? (
+          <div className="bg-white rounded-xl p-8 text-center shadow-sm border border-gray-100">
+            <p className="text-gray-400 text-sm">この月の取引はありません</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {groupedTx.map(group => {
+              const key = `${group.type}-${group.subcategory}`;
+              const expanded = expandedGroups.has(key);
+              return (
+                <div key={key} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                  {/* Group header */}
+                  <button
+                    onClick={() => toggleGroup(key)}
+                    className="w-full flex items-center px-4 py-3 hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="w-2.5 h-2.5 rounded-full mr-3 shrink-0" style={{ backgroundColor: getCategoryColor(group.subcategory, 0) }} />
+                    <span className="text-sm font-medium text-gray-800 flex-1 text-left">{group.subcategory}</span>
+                    <span className="text-xs text-gray-400 mr-2">{group.items.length}件</span>
+                    <span className={`text-sm font-bold mr-2 ${typeAmountColor[group.type]}`}>{fmtShort(group.total)}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                    </svg>
+                  </button>
+
+                  {/* Expanded items */}
+                  {expanded && (
+                    <div className="border-t border-gray-100 divide-y divide-gray-50">
+                      {group.items.map(tx => (
+                        <div key={tx.id} className="flex items-center px-4 py-2.5 gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm text-gray-800 truncate">{tx.itemName}</p>
+                            <p className="text-xs text-gray-400">
+                              {tx.day ? `${selectedMonth}/${tx.day}` : `${selectedMonth}月`}
+                              {tx.note && tx.note !== 'MF取込' && ` · ${tx.note}`}
+                            </p>
+                          </div>
+                          <span className={`text-sm font-semibold shrink-0 ${typeAmountColor[group.type]}`}>{fmt(tx.amount)}</span>
+                          <button onClick={() => openReclassify(tx)} className="text-gray-300 hover:text-indigo-500 p-1 shrink-0" title="分類変更">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
+                            </svg>
+                          </button>
+                          <button onClick={() => openEdit(tx)} className="text-gray-300 hover:text-indigo-500 p-1 shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                            </svg>
+                          </button>
+                          <button onClick={() => deleteTransaction(tx.id)} className="text-gray-300 hover:text-red-400 p-1 shrink-0">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ===== ANNUAL SUMMARY ===== */}
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">支出内訳</h3>
-          <ResponsiveContainer width="100%" height={240}>
-            <PieChart>
-              <Pie
-                data={pieData}
-                dataKey="value"
-                nameKey="name"
-                cx="50%"
-                cy="50%"
-                outerRadius={80}
-                label={({ name, percent }) => `${name} ${Math.round((percent || 0) * 100)}%`}
-                labelLine={false}
-              >
-                {pieData.map((entry, index) => (
-                  <Cell key={index} fill={getCategoryColor(entry.name, index)} />
-                ))}
-              </Pie>
-              <Tooltip formatter={(value: number) => formatAmount(value)} />
-              <Legend />
-            </PieChart>
-          </ResponsiveContainer>
+          <h3 className="text-sm font-semibold text-gray-700 mb-3">{selectedYear}年 年間サマリー</h3>
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div><p className="text-xs text-gray-400">月平均収入</p><p className="font-semibold text-blue-600">{fmt(Math.round(annualIncome / monthsWithData))}</p></div>
+            <div><p className="text-xs text-gray-400">月平均支出</p><p className="font-semibold text-red-500">{fmt(Math.round(annualExpense / monthsWithData))}</p></div>
+            <div><p className="text-xs text-gray-400">年間収入合計</p><p className="font-semibold text-blue-600">{fmt(annualIncome)}</p></div>
+            <div><p className="text-xs text-gray-400">年間支出合計</p><p className="font-semibold text-red-500">{fmt(annualExpense)}</p></div>
+          </div>
         </div>
-      )}
 
-      {/* Annual summary */}
-      <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3">{selectedYear}年 年間サマリー</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <p className="text-xs text-gray-500">月平均収入</p>
-            <p className="text-sm font-semibold text-blue-600">{formatAmount(avgMonthlyIncome)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">月平均支出</p>
-            <p className="text-sm font-semibold text-red-500">{formatAmount(avgMonthlyExpense)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">年間収入合計</p>
-            <p className="text-sm font-semibold text-blue-600">{formatAmount(annualIncome)}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">年間支出合計</p>
-            <p className="text-sm font-semibold text-red-500">{formatAmount(annualExpense)}</p>
-          </div>
-        </div>
       </div>
 
-      {/* Modal */}
+      {/* ===== ADD/EDIT MODAL ===== */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
           <div className="bg-white w-full md:max-w-md rounded-t-2xl md:rounded-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-4 border-b border-gray-100">
-              <h2 className="text-base font-semibold text-gray-800">
-                {editingId ? '取引を編集' : '取引を追加'}
-              </h2>
+              <h2 className="text-base font-semibold text-gray-800">{editingId ? '取引を編集' : '取引を追加'}</h2>
               <button onClick={() => { setShowModal(false); setEditingId(null); }} className="text-gray-400 hover:text-gray-600">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
             <div className="p-4 space-y-4">
-              {/* Type selector */}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">種別</label>
                 <div className="flex gap-2">
                   {(['income', 'expense', 'investment'] as TransactionType[]).map(t => (
-                    <button
-                      key={t}
-                      onClick={() => handleTypeChange(t)}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                        form.type === t
-                          ? t === 'income' ? 'bg-emerald-500 text-white border-emerald-500'
-                            : t === 'expense' ? 'bg-red-500 text-white border-red-500'
-                            : 'bg-blue-500 text-white border-blue-500'
-                          : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
+                    <button key={t} onClick={() => { const cats = getCategoriesForType(t); setForm(f => ({ ...f, type: t, category: cats[0] })); }}
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${form.type === t ? (t === 'income' ? 'bg-blue-500 text-white border-blue-500' : t === 'expense' ? 'bg-red-500 text-white border-red-500' : 'bg-gray-600 text-white border-gray-600') : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
                       {typeLabel[t]}
                     </button>
                   ))}
                 </div>
               </div>
-
-              {/* Category */}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">カテゴリ</label>
-                <select
-                  value={form.category}
-                  onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                >
-                  {getCategoriesForType(form.type).map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
+                <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  {getCategoriesForType(form.type).map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
-
-              {/* Subcategory */}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">サブカテゴリ（例：食費、家賃）</label>
-                <input
-                  type="text"
-                  value={form.subcategory}
-                  onChange={e => setForm(f => ({ ...f, subcategory: e.target.value }))}
-                  placeholder="食費、家賃、交通費など"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+                <input type="text" value={form.subcategory} onChange={e => setForm(f => ({ ...f, subcategory: e.target.value }))} placeholder="食費、家賃、交通費など" className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
-
-              {/* Item name */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">品目名</label>
-                <input
-                  type="text"
-                  value={form.itemName}
-                  onChange={e => setForm(f => ({ ...f, itemName: e.target.value }))}
-                  placeholder="スーパー、家賃支払いなど"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">店名・品目名</label>
+                <input type="text" value={form.itemName} onChange={e => setForm(f => ({ ...f, itemName: e.target.value }))} placeholder="スーパー、家賃支払いなど" className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
-
-              {/* Amount */}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">金額（円）</label>
-                <input
-                  type="number"
-                  value={form.amount}
-                  onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-                  placeholder="0"
-                  min="0"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+                <input type="number" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="0" min="0" className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
-
-              {/* Note */}
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">メモ（任意）</label>
-                <input
-                  type="text"
-                  value={form.note}
-                  onChange={e => setForm(f => ({ ...f, note: e.target.value }))}
-                  placeholder="備考など"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+                <input type="text" value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} placeholder="備考など" className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
               </div>
-
-              <button
-                onClick={handleSubmit}
-                disabled={!form.subcategory.trim() || !form.itemName.trim() || !form.amount}
-                className="w-full bg-indigo-600 text-white py-3 rounded-xl font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
+              <button onClick={handleSubmit} disabled={!form.subcategory.trim() || !form.itemName.trim() || !form.amount} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-medium hover:bg-indigo-700 disabled:opacity-50">
                 {editingId ? '更新する' : '追加する'}
               </button>
             </div>
@@ -549,10 +434,58 @@ export default function ActualResults() {
         </div>
       )}
 
-      {/* MoneyForward Import Modal */}
-      {showImport && (
-        <MoneyForwardImport onClose={() => setShowImport(false)} />
+      {/* ===== RECLASSIFY MODAL ===== */}
+      {reclassify && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
+          <div className="bg-white w-full md:max-w-md rounded-t-2xl md:rounded-2xl">
+            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-800">分類を変更</h2>
+              <button onClick={() => setReclassify(null)} className="text-gray-400 hover:text-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div className="bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-600">
+                <span className="font-medium">{reclassify.tx.itemName}</span>
+                <span className="text-xs text-gray-400 ml-2">{fmt(reclassify.tx.amount)}</span>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">種別</label>
+                <div className="flex gap-2">
+                  {(['income', 'expense', 'investment'] as TransactionType[]).map(t => (
+                    <button key={t} onClick={() => { const cats = getCategoriesForType(t); setReclassify(r => r ? { ...r, type: t, category: cats[0] } : r); }}
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${reclassify.type === t ? (t === 'income' ? 'bg-blue-500 text-white border-blue-500' : t === 'expense' ? 'bg-red-500 text-white border-red-500' : 'bg-gray-600 text-white border-gray-600') : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+                      {typeLabel[t]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">カテゴリ</label>
+                <select value={reclassify.category} onChange={e => setReclassify(r => r ? { ...r, category: e.target.value } : r)} className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                  {getCategoriesForType(reclassify.type).map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">サブカテゴリ</label>
+                <input type="text" value={reclassify.subcategory} onChange={e => setReclassify(r => r ? { ...r, subcategory: e.target.value } : r)} className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              </div>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" checked={applyToAll} onChange={e => setApplyToAll(e.target.checked)} className="rounded text-indigo-600 w-4 h-4" />
+                <div>
+                  <p className="text-sm font-medium text-gray-700">「{reclassify.tx.itemName}」を今後も同じ分類に</p>
+                  <p className="text-xs text-gray-400">同じ店名の取引に一括適用し、次回取込時も自動分類します</p>
+                </div>
+              </label>
+              <button onClick={handleReclassify} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-medium hover:bg-indigo-700">
+                変更を保存
+              </button>
+            </div>
+          </div>
+        </div>
       )}
+
+      {showImport && <MoneyForwardImport onClose={() => setShowImport(false)} />}
     </div>
   );
 }
