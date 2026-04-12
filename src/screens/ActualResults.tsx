@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { useApp } from '../contexts/AppContext';
 import { Transaction, TransactionType } from '../types';
 import MoneyForwardImport from '../components/MoneyForwardImport';
-import { saveCategoryRule, getCategoryRules } from '../lib/categoryRules';
+import { saveCategoryRule } from '../lib/categoryRules';
 
 const EXPENSE_CATEGORIES = ['毎月固定費', '毎月変動費', '不定期固定費', '不定期変動費'];
 const INCOME_CATEGORIES = ['予算内', '予算外'];
@@ -181,12 +181,6 @@ export default function ActualResults() {
     income: 'text-blue-600',
     expense: 'text-red-500',
     investment: 'text-gray-700',
-  };
-
-  const typeLabelColor: Record<TransactionType, string> = {
-    income: 'text-blue-500',
-    expense: 'text-red-400',
-    investment: 'text-gray-500',
   };
 
   const typeLabel: Record<TransactionType, string> = { income: '収入', expense: '支出', investment: '投資・貯蓄' };

@@ -78,7 +78,7 @@ export default function Home() {
           <h2 className="text-sm font-semibold text-gray-700">月別支出率</h2>
         </div>
         <div className="divide-y divide-gray-50">
-          {monthlyStats.map(({ year, month, income, expense, rate, hasData }) => (
+          {monthlyStats.map(({ year, month, rate, hasData }) => (
             <div key={`${year}-${month}`} className="flex items-center px-4 py-2.5">
               <span className="text-sm text-gray-600 w-16 shrink-0">{year}年{month}月</span>
               <div className="flex-1 mx-3">
