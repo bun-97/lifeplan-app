@@ -6,10 +6,7 @@ function fmt(n: number): string {
   return n.toLocaleString('ja-JP') + '円';
 }
 
-const FIXED_MONTHLY_CATS = ['住宅', '通信費', '保険', 'サブスク費', '水道光熱費', '自動車'];
-const VAR_MONTHLY_CATS = ['食費', '日用品', '交際費', '衣服・美容', '健康・医療', '教養・教育'];
-const FIXED_IRREG_CATS = ['税・社会保障'];
-const VAR_IRREG_CATS = ['その他', '臨時支出'];
+const EXPENSE_TYPES = ['毎月固定', '毎月変動', '不定期固定', '不定期変動'] as const;
 
 export default function Home() {
   const { currentProfile, transactions } = useApp();
@@ -55,24 +52,41 @@ export default function Home() {
   const annualIncome = thisYearTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
   const annualExpense = thisYearTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
 
-  // Monthly expense summary based on 大分類 mapping
-  const expenseSummary = useMemo(() => {
-    const n = monthsWithData.length || 1;
-    const allExpense = transactions.filter(t => t.type === 'expense');
+  // Monthly expense summary based on expenseType tag
+  const avgByExpenseType = useMemo(() => {
+    const result: Record<string, number> = {};
+    for (const et of EXPENSE_TYPES) {
+      const monthAmounts = last12Months.map(({ year, month }) => {
+        const monthTx = transactions.filter(t =>
+          t.year === year && t.month === month &&
+          t.type === 'expense' && t.expenseType === et
+        );
+        return monthTx.reduce((s, t) => s + t.amount, 0);
+      }).filter(amt => amt > 0);
 
-    function sumByCats(cats: string[]) {
-      return allExpense
-        .filter(t => cats.includes(t.subcategory))
-        .reduce((s, t) => s + t.amount, 0);
+      result[et] = monthAmounts.length > 0
+        ? Math.round(monthAmounts.reduce((a, b) => a + b, 0) / monthAmounts.length)
+        : 0;
     }
+    return result;
+  }, [last12Months, transactions]);
+
+  // Budget income breakdown (予算内/予算外)
+  const avgBudgetIncome = useMemo(() => {
+    const budgetNai = last12Months.map(({ year, month }) =>
+      transactions.filter(t => t.year === year && t.month === month && t.type === 'income' && t.budgetType === '予算内')
+        .reduce((s, t) => s + t.amount, 0)
+    ).filter(a => a > 0);
+    const budgetGai = last12Months.map(({ year, month }) =>
+      transactions.filter(t => t.year === year && t.month === month && t.type === 'income' && t.budgetType === '予算外')
+        .reduce((s, t) => s + t.amount, 0)
+    ).filter(a => a > 0);
 
     return {
-      fixedMonthly: Math.round(sumByCats(FIXED_MONTHLY_CATS) / n),
-      varMonthly: Math.round(sumByCats(VAR_MONTHLY_CATS) / n),
-      fixedIrreg: Math.round(sumByCats(FIXED_IRREG_CATS) / n),
-      varIrreg: Math.round(sumByCats(VAR_IRREG_CATS) / n),
+      予算内: budgetNai.length > 0 ? Math.round(budgetNai.reduce((a, b) => a + b, 0) / budgetNai.length) : 0,
+      予算外: budgetGai.length > 0 ? Math.round(budgetGai.reduce((a, b) => a + b, 0) / budgetGai.length) : 0,
     };
-  }, [transactions, monthsWithData.length]);
+  }, [last12Months, transactions]);
 
   // Current month totals for summary bar
   const currentMonthTx = useMemo(
@@ -131,7 +145,7 @@ export default function Home() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100">
           <p className="text-sm font-semibold text-gray-800">月間支出サマリー</p>
-          <p className="text-xs text-gray-400 mt-0.5">全期間データの月平均</p>
+          <p className="text-xs text-gray-400 mt-0.5">直近12か月の月平均（支出分類タグ基準）</p>
         </div>
         <table className="w-full">
           <thead>
@@ -141,24 +155,28 @@ export default function Home() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            <tr>
-              <td className="px-4 py-3 text-sm text-gray-700">毎月固定費</td>
-              <td className="px-4 py-3 text-sm font-semibold text-red-500 text-right">{fmt(expenseSummary.fixedMonthly)}</td>
-            </tr>
-            <tr>
-              <td className="px-4 py-3 text-sm text-gray-700">毎月変動費</td>
-              <td className="px-4 py-3 text-sm font-semibold text-red-500 text-right">{fmt(expenseSummary.varMonthly)}</td>
-            </tr>
-            <tr>
-              <td className="px-4 py-3 text-sm text-gray-700">不定期固定費</td>
-              <td className="px-4 py-3 text-sm font-semibold text-red-500 text-right">{fmt(expenseSummary.fixedIrreg)}</td>
-            </tr>
-            <tr>
-              <td className="px-4 py-3 text-sm text-gray-700">不定期変動費</td>
-              <td className="px-4 py-3 text-sm font-semibold text-red-500 text-right">{fmt(expenseSummary.varIrreg)}</td>
-            </tr>
+            {EXPENSE_TYPES.map(et => (
+              <tr key={et}>
+                <td className="px-4 py-3 text-sm text-gray-700">{et}費</td>
+                <td className="px-4 py-3 text-sm font-semibold text-red-500 text-right">{fmt(avgByExpenseType[et] ?? 0)}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
+        {/* Budget income breakdown */}
+        {(avgBudgetIncome['予算内'] > 0 || avgBudgetIncome['予算外'] > 0) && (
+          <div className="px-4 py-3 border-t border-gray-100 space-y-1.5">
+            <p className="text-xs font-medium text-gray-500 mb-2">収入内訳（予算区分）月平均</p>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">予算内（給与・定期収入）</span>
+              <span className="font-semibold text-green-600">{fmt(avgBudgetIncome['予算内'])}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">予算外（ボーナス・臨時収入）</span>
+              <span className="font-semibold text-orange-500">{fmt(avgBudgetIncome['予算外'])}</span>
+            </div>
+          </div>
+        )}
         {/* Current month totals */}
         <div className="px-4 py-3 border-t border-gray-100 bg-gray-50 space-y-1.5">
           <p className="text-xs font-medium text-gray-500 mb-2">{currentYear}年{currentMonth}月 実績</p>

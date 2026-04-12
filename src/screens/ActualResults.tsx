@@ -48,6 +48,7 @@ interface ReclassifyState {
 
 export default function ActualResults() {
   const { currentProfile, transactions, addTransaction, updateTransaction } = useApp();
+  const members = currentProfile?.members ?? [];
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
@@ -56,6 +57,9 @@ export default function ActualResults() {
   const [showCategorySettings, setShowCategorySettings] = useState(false);
   const [form, setForm] = useState<FormState>(defaultForm);
   const [minorCategory, setMinorCategory] = useState('');
+  const [expenseType, setExpenseType] = useState<'毎月固定'|'毎月変動'|'不定期固定'|'不定期変動'|''>('');
+  const [budgetType, setBudgetType] = useState<'予算内'|'予算外'|''>('');
+  const [member, setMember] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [reclassify, setReclassify] = useState<ReclassifyState | null>(null);
@@ -105,7 +109,7 @@ export default function ActualResults() {
     else setSelectedMonth(m => m + 1);
   }
 
-  function openAdd() { setForm(defaultForm); setMinorCategory(''); setEditingId(null); setShowModal(true); }
+  function openAdd() { setForm(defaultForm); setMinorCategory(''); setExpenseType(''); setBudgetType(''); setMember(''); setEditingId(null); setShowModal(true); }
 
   function handleSubmit() {
     if (!form.subcategory.trim() || !form.itemName.trim() || !form.amount) return;
@@ -113,12 +117,12 @@ export default function ActualResults() {
     if (isNaN(amount) || amount <= 0) return;
     if (editingId) {
       const existing = transactions.find(t => t.id === editingId);
-      if (existing) updateTransaction({ ...existing, type: form.type, category: form.subcategory, subcategory: form.subcategory, minorCategory: minorCategory || undefined, itemName: form.itemName, amount, note: form.note || undefined });
+      if (existing) updateTransaction({ ...existing, type: form.type, category: form.subcategory, subcategory: form.subcategory, minorCategory: minorCategory || undefined, itemName: form.itemName, amount, note: form.note || undefined, expenseType: expenseType || undefined, budgetType: budgetType || undefined, member: member || undefined });
     } else {
       if (!currentProfile) return;
-      addTransaction({ profileId: currentProfile.id, year: selectedYear, month: selectedMonth, type: form.type, category: form.subcategory, subcategory: form.subcategory, minorCategory: minorCategory || undefined, itemName: form.itemName, amount, note: form.note || undefined });
+      addTransaction({ profileId: currentProfile.id, year: selectedYear, month: selectedMonth, type: form.type, category: form.subcategory, subcategory: form.subcategory, minorCategory: minorCategory || undefined, itemName: form.itemName, amount, note: form.note || undefined, expenseType: expenseType || undefined, budgetType: budgetType || undefined, member: member || undefined });
     }
-    setShowModal(false); setForm(defaultForm); setMinorCategory(''); setEditingId(null);
+    setShowModal(false); setForm(defaultForm); setMinorCategory(''); setExpenseType(''); setBudgetType(''); setMember(''); setEditingId(null);
   }
 
   function openReclassify(tx: Transaction) {
@@ -237,6 +241,14 @@ export default function ActualResults() {
                                   <div className="flex-1 min-w-0">
                                     <p className="text-xs text-gray-700 truncate">{tx.itemName}</p>
                                     <p className="text-[10px] text-gray-400">{selectedMonth}/{tx.day || '?'} · {fmt(tx.amount)}</p>
+                                    <div className="flex gap-1 flex-wrap mt-0.5">
+                                      {tx.budgetType && (
+                                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${tx.budgetType === '予算内' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>{tx.budgetType}</span>
+                                      )}
+                                      {tx.member && (
+                                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-600">{tx.member}</span>
+                                      )}
+                                    </div>
                                   </div>
                                   <button onClick={() => openReclassify(tx)} className="text-gray-300 hover:text-indigo-500 p-0.5 shrink-0" title="分類変更">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
@@ -299,6 +311,14 @@ export default function ActualResults() {
                                   <div className="flex-1 min-w-0">
                                     <p className="text-xs text-gray-700 truncate">{tx.itemName}</p>
                                     <p className="text-[10px] text-gray-400">{selectedMonth}/{tx.day || '?'} · {fmt(tx.amount)}</p>
+                                    <div className="flex gap-1 flex-wrap mt-0.5">
+                                      {tx.expenseType && (
+                                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">{tx.expenseType}</span>
+                                      )}
+                                      {tx.member && (
+                                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-600">{tx.member}</span>
+                                      )}
+                                    </div>
                                   </div>
                                   <button onClick={() => openReclassify(tx)} className="text-gray-300 hover:text-indigo-500 p-0.5 shrink-0" title="分類変更">
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
@@ -384,6 +404,51 @@ export default function ActualResults() {
                     <option value="">選択してください</option>
                     {getMinorCategories(form.type, form.subcategory).map(sub => (
                       <option key={sub} value={sub}>{sub}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {form.type === 'expense' && (
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">支出分類</label>
+                  <select
+                    value={expenseType}
+                    onChange={e => setExpenseType(e.target.value as '毎月固定'|'毎月変動'|'不定期固定'|'不定期変動'|'')}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white"
+                  >
+                    <option value="">選択してください</option>
+                    <option value="毎月固定">毎月固定</option>
+                    <option value="毎月変動">毎月変動</option>
+                    <option value="不定期固定">不定期固定</option>
+                    <option value="不定期変動">不定期変動</option>
+                  </select>
+                </div>
+              )}
+              {form.type === 'income' && (
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">予算区分</label>
+                  <select
+                    value={budgetType}
+                    onChange={e => setBudgetType(e.target.value as '予算内'|'予算外'|'')}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white"
+                  >
+                    <option value="">選択してください</option>
+                    <option value="予算内">予算内（給与・定期収入）</option>
+                    <option value="予算外">予算外（ボーナス・臨時収入）</option>
+                  </select>
+                </div>
+              )}
+              {members.length > 0 && (
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">メンバー</label>
+                  <select
+                    value={member}
+                    onChange={e => setMember(e.target.value)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white"
+                  >
+                    <option value="">全員 / 共通</option>
+                    {members.map(m => (
+                      <option key={m.id} value={m.name}>{m.name}</option>
                     ))}
                   </select>
                 </div>

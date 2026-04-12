@@ -16,6 +16,9 @@ export interface Transaction {
   amount: number;
   note?: string;
   createdAt: string;
+  expenseType?: '毎月固定' | '毎月変動' | '不定期固定' | '不定期変動';
+  budgetType?: '予算内' | '予算外';
+  member?: string;
 }
 
 export interface Budget {
