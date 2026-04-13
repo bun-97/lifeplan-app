@@ -226,59 +226,77 @@ export default function ActualResults() {
                     {incomePieData.map((item, i) => {
                       const pct = incomePieTotal > 0 ? Math.round(item.value / incomePieTotal * 100) : 0;
                       const color = getCategoryColor(item.name, i);
-                      const key = `income-${item.name}`;
-                      const expanded = expandedGroups.has(key);
-                      const txItems = monthlyTx.filter(t => t.type === 'income' && (t.subcategory || t.itemName) === item.name).sort((a, b) => (b.day || 0) - (a.day || 0));
+                      const majorKey = `income-${item.name}`;
+                      const majorExpanded = expandedGroups.has(majorKey);
+                      const majorTx = monthlyTx.filter(t => t.type === 'income' && (t.subcategory || t.itemName) === item.name);
+                      // Group by minor category
+                      const minorMap: Record<string, number> = {};
+                      majorTx.forEach(t => { const k = t.minorCategory || t.itemName; minorMap[k] = (minorMap[k] || 0) + t.amount; });
+                      const minorGroups = Object.entries(minorMap).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
                       return (
                         <div key={item.name}>
-                          <button onClick={() => toggleGroup(key)} className="w-full flex items-center px-2 py-1.5 gap-1.5 hover:bg-gray-50 transition-colors">
+                          {/* 大分類行 */}
+                          <button onClick={() => toggleGroup(majorKey)} className="w-full flex items-center px-2 py-2 gap-1.5 hover:bg-gray-50 transition-colors">
                             <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                            <span className="text-xs text-gray-700 flex-1 truncate text-left">{item.name}</span>
-                            <span className="text-xs text-gray-400 shrink-0">{pct}%</span>
-                            <span className="text-xs text-gray-500 shrink-0">{fmtShort(item.value)}</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-3 h-3 text-gray-300 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}>
+                            <span className="text-xs font-semibold text-gray-800 flex-1 truncate text-left">{item.name}</span>
+                            <span className="text-[10px] text-gray-400 shrink-0">{pct}%</span>
+                            <span className="text-xs text-gray-600 font-medium shrink-0">{fmtShort(item.value)}</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-3 h-3 text-gray-300 shrink-0 transition-transform ${majorExpanded ? 'rotate-180' : ''}`}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                             </svg>
                           </button>
-                          {expanded && (
-                            <div className="bg-gray-50 border-t border-gray-100 divide-y divide-gray-100">
-                              {txItems.map(tx => (
-                                <div key={tx.id} className={`flex items-center px-2 py-1.5 gap-1 ${tx.excluded ? 'opacity-40' : ''}`}>
-                                  <div className="flex-1 min-w-0">
-                                    <p className={`text-xs text-gray-700 truncate ${tx.excluded ? 'line-through' : ''}`}>{tx.itemName}</p>
-                                    <p className="text-[10px] text-gray-400">{selectedMonth}/{tx.day || '?'} · {fmt(tx.amount)}</p>
-                                    <div className="flex gap-1 flex-wrap mt-0.5">
-                                      {tx.budgetType && (
-                                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${tx.budgetType === '予算内' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>{tx.budgetType}</span>
-                                      )}
-                                      {tx.member && (
-                                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-600">{tx.member}</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <button
-                                    onClick={() => updateTransaction({ ...tx, excluded: !tx.excluded })}
-                                    className={`p-0.5 shrink-0 ${tx.excluded ? 'text-orange-400' : 'text-gray-300 hover:text-orange-400'}`}
-                                    title={tx.excluded ? '集計に含める' : '集計から除外'}
-                                  >
-                                    {tx.excluded ? (
-                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+                          {/* 中分類・明細 */}
+                          {majorExpanded && (
+                            <div className="border-t border-gray-100">
+                              {minorGroups.map(minor => {
+                                const minorKey = `income-${item.name}-${minor.name}`;
+                                const minorExpanded = expandedGroups.has(minorKey);
+                                const minorTx = majorTx.filter(t => (t.minorCategory || t.itemName) === minor.name).sort((a, b) => (b.day || 0) - (a.day || 0));
+                                return (
+                                  <div key={minor.name} className="border-b border-gray-50 last:border-0">
+                                    {/* 中分類行 */}
+                                    <button onClick={() => toggleGroup(minorKey)} className="w-full flex items-center pl-5 pr-2 py-1.5 gap-1.5 bg-gray-50/60 hover:bg-gray-100 transition-colors">
+                                      <span className="text-[9px] text-gray-400 shrink-0">●</span>
+                                      <span className="text-xs text-gray-600 flex-1 truncate text-left">{minor.name}</span>
+                                      <span className="text-xs text-gray-500 shrink-0">{fmtShort(minor.total)}</span>
+                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-3 h-3 text-gray-300 shrink-0 transition-transform ${minorExpanded ? 'rotate-180' : ''}`}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                                       </svg>
-                                    ) : (
-                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                                      </svg>
+                                    </button>
+                                    {/* 明細行 */}
+                                    {minorExpanded && (
+                                      <div className="bg-gray-100 divide-y divide-gray-200">
+                                        {minorTx.map(tx => (
+                                          <div key={tx.id} className={`flex items-center pl-7 pr-2 py-1.5 gap-1 ${tx.excluded ? 'opacity-40' : ''}`}>
+                                            <div className="flex-1 min-w-0">
+                                              <p className={`text-xs text-gray-700 truncate ${tx.excluded ? 'line-through' : ''}`}>{tx.itemName}</p>
+                                              <p className="text-[10px] text-gray-400">{selectedMonth}/{tx.day || '?'} · {fmt(tx.amount)}</p>
+                                              <div className="flex gap-1 flex-wrap mt-0.5">
+                                                {tx.budgetType && (
+                                                  <span className={`text-[10px] px-1 py-0.5 rounded-full ${tx.budgetType === '予算内' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>{tx.budgetType}</span>
+                                                )}
+                                                {tx.member && (
+                                                  <span className="text-[10px] px-1 py-0.5 rounded-full bg-purple-50 text-purple-600">{tx.member}</span>
+                                                )}
+                                              </div>
+                                            </div>
+                                            <button onClick={() => updateTransaction({ ...tx, excluded: !tx.excluded })} className={`p-0.5 shrink-0 ${tx.excluded ? 'text-orange-400' : 'text-gray-300 hover:text-orange-400'}`} title={tx.excluded ? '集計に含める' : '集計から除外'}>
+                                              {tx.excluded ? (
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" /></svg>
+                                              ) : (
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+                                              )}
+                                            </button>
+                                            <button onClick={() => openReclassify(tx)} className="text-gray-300 hover:text-indigo-500 p-0.5 shrink-0" title="分類変更">
+                                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" /></svg>
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
                                     )}
-                                  </button>
-                                  <button onClick={() => openReclassify(tx)} className="text-gray-300 hover:text-indigo-500 p-0.5 shrink-0" title="分類変更">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
-                                    </svg>
-                                  </button>
-                                </div>
-                              ))}
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -312,59 +330,77 @@ export default function ActualResults() {
                     {expensePieData.map((item, i) => {
                       const pct = expensePieTotal > 0 ? Math.round(item.value / expensePieTotal * 100) : 0;
                       const color = getCategoryColor(item.name, i);
-                      const key = `expense-${item.name}`;
-                      const expanded = expandedGroups.has(key);
-                      const txItems = monthlyTx.filter(t => t.type === 'expense' && (t.subcategory || t.itemName) === item.name).sort((a, b) => (b.day || 0) - (a.day || 0));
+                      const majorKey = `expense-${item.name}`;
+                      const majorExpanded = expandedGroups.has(majorKey);
+                      const majorTx = monthlyTx.filter(t => t.type === 'expense' && (t.subcategory || t.itemName) === item.name);
+                      // Group by minor category
+                      const minorMap: Record<string, number> = {};
+                      majorTx.forEach(t => { const k = t.minorCategory || t.itemName; minorMap[k] = (minorMap[k] || 0) + t.amount; });
+                      const minorGroups = Object.entries(minorMap).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
                       return (
                         <div key={item.name}>
-                          <button onClick={() => toggleGroup(key)} className="w-full flex items-center px-2 py-1.5 gap-1.5 hover:bg-gray-50 transition-colors">
+                          {/* 大分類行 */}
+                          <button onClick={() => toggleGroup(majorKey)} className="w-full flex items-center px-2 py-2 gap-1.5 hover:bg-gray-50 transition-colors">
                             <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                            <span className="text-xs text-gray-700 flex-1 truncate text-left">{item.name}</span>
-                            <span className="text-xs text-gray-400 shrink-0">{pct}%</span>
-                            <span className="text-xs text-gray-500 shrink-0">{fmtShort(item.value)}</span>
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-3 h-3 text-gray-300 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}>
+                            <span className="text-xs font-semibold text-gray-800 flex-1 truncate text-left">{item.name}</span>
+                            <span className="text-[10px] text-gray-400 shrink-0">{pct}%</span>
+                            <span className="text-xs text-gray-600 font-medium shrink-0">{fmtShort(item.value)}</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-3 h-3 text-gray-300 shrink-0 transition-transform ${majorExpanded ? 'rotate-180' : ''}`}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                             </svg>
                           </button>
-                          {expanded && (
-                            <div className="bg-gray-50 border-t border-gray-100 divide-y divide-gray-100">
-                              {txItems.map(tx => (
-                                <div key={tx.id} className={`flex items-center px-2 py-1.5 gap-1 ${tx.excluded ? 'opacity-40' : ''}`}>
-                                  <div className="flex-1 min-w-0">
-                                    <p className={`text-xs text-gray-700 truncate ${tx.excluded ? 'line-through' : ''}`}>{tx.itemName}</p>
-                                    <p className="text-[10px] text-gray-400">{selectedMonth}/{tx.day || '?'} · {fmt(tx.amount)}</p>
-                                    <div className="flex gap-1 flex-wrap mt-0.5">
-                                      {tx.expenseType && (
-                                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600">{tx.expenseType}</span>
-                                      )}
-                                      {tx.member && (
-                                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-purple-50 text-purple-600">{tx.member}</span>
-                                      )}
-                                    </div>
-                                  </div>
-                                  <button
-                                    onClick={() => updateTransaction({ ...tx, excluded: !tx.excluded })}
-                                    className={`p-0.5 shrink-0 ${tx.excluded ? 'text-orange-400' : 'text-gray-300 hover:text-orange-400'}`}
-                                    title={tx.excluded ? '集計に含める' : '集計から除外'}
-                                  >
-                                    {tx.excluded ? (
-                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+                          {/* 中分類・明細 */}
+                          {majorExpanded && (
+                            <div className="border-t border-gray-100">
+                              {minorGroups.map(minor => {
+                                const minorKey = `expense-${item.name}-${minor.name}`;
+                                const minorExpanded = expandedGroups.has(minorKey);
+                                const minorTx = majorTx.filter(t => (t.minorCategory || t.itemName) === minor.name).sort((a, b) => (b.day || 0) - (a.day || 0));
+                                return (
+                                  <div key={minor.name} className="border-b border-gray-50 last:border-0">
+                                    {/* 中分類行 */}
+                                    <button onClick={() => toggleGroup(minorKey)} className="w-full flex items-center pl-5 pr-2 py-1.5 gap-1.5 bg-gray-50/60 hover:bg-gray-100 transition-colors">
+                                      <span className="text-[9px] text-gray-400 shrink-0">●</span>
+                                      <span className="text-xs text-gray-600 flex-1 truncate text-left">{minor.name}</span>
+                                      <span className="text-xs text-gray-500 shrink-0">{fmtShort(minor.total)}</span>
+                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-3 h-3 text-gray-300 shrink-0 transition-transform ${minorExpanded ? 'rotate-180' : ''}`}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                                       </svg>
-                                    ) : (
-                                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                                      </svg>
+                                    </button>
+                                    {/* 明細行 */}
+                                    {minorExpanded && (
+                                      <div className="bg-gray-100 divide-y divide-gray-200">
+                                        {minorTx.map(tx => (
+                                          <div key={tx.id} className={`flex items-center pl-7 pr-2 py-1.5 gap-1 ${tx.excluded ? 'opacity-40' : ''}`}>
+                                            <div className="flex-1 min-w-0">
+                                              <p className={`text-xs text-gray-700 truncate ${tx.excluded ? 'line-through' : ''}`}>{tx.itemName}</p>
+                                              <p className="text-[10px] text-gray-400">{selectedMonth}/{tx.day || '?'} · {fmt(tx.amount)}</p>
+                                              <div className="flex gap-1 flex-wrap mt-0.5">
+                                                {tx.expenseType && (
+                                                  <span className="text-[10px] px-1 py-0.5 rounded-full bg-blue-50 text-blue-600">{tx.expenseType}</span>
+                                                )}
+                                                {tx.member && (
+                                                  <span className="text-[10px] px-1 py-0.5 rounded-full bg-purple-50 text-purple-600">{tx.member}</span>
+                                                )}
+                                              </div>
+                                            </div>
+                                            <button onClick={() => updateTransaction({ ...tx, excluded: !tx.excluded })} className={`p-0.5 shrink-0 ${tx.excluded ? 'text-orange-400' : 'text-gray-300 hover:text-orange-400'}`} title={tx.excluded ? '集計に含める' : '集計から除外'}>
+                                              {tx.excluded ? (
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" /></svg>
+                                              ) : (
+                                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>
+                                              )}
+                                            </button>
+                                            <button onClick={() => openReclassify(tx)} className="text-gray-300 hover:text-indigo-500 p-0.5 shrink-0" title="分類変更">
+                                              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" /></svg>
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
                                     )}
-                                  </button>
-                                  <button onClick={() => openReclassify(tx)} className="text-gray-300 hover:text-indigo-500 p-0.5 shrink-0" title="分類変更">
-                                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
-                                    </svg>
-                                  </button>
-                                </div>
-                              ))}
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
