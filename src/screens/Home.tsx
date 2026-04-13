@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../contexts/AppContext';
+import { getTagForCategory } from '../lib/categoryConfig';
 
 function fmt(n: number): string {
   if (n >= 10000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + '万円';
@@ -59,9 +60,13 @@ export default function Home() {
       const monthAmounts = last12Months.map(({ year, month }) => {
         const monthTx = transactions.filter(t =>
           t.year === year && t.month === month &&
-          t.type === 'expense' && t.expenseType === et
+          t.type === 'expense' && !t.excluded
         );
-        return monthTx.reduce((s, t) => s + t.amount, 0);
+        const filtered = monthTx.filter(t => {
+          const effectiveType = t.expenseType || getTagForCategory('expense', t.subcategory).expenseType;
+          return effectiveType === et;
+        });
+        return filtered.reduce((s, t) => s + t.amount, 0);
       }).filter(amt => amt > 0);
 
       result[et] = monthAmounts.length > 0
@@ -74,12 +79,18 @@ export default function Home() {
   // Budget income breakdown (予算内/予算外)
   const avgBudgetIncome = useMemo(() => {
     const budgetNai = last12Months.map(({ year, month }) =>
-      transactions.filter(t => t.year === year && t.month === month && t.type === 'income' && t.budgetType === '予算内')
-        .reduce((s, t) => s + t.amount, 0)
+      transactions.filter(t => {
+        if (t.year !== year || t.month !== month || t.type !== 'income') return false;
+        const effective = t.budgetType || getTagForCategory('income', t.subcategory).budgetType;
+        return effective === '予算内';
+      }).reduce((s, t) => s + t.amount, 0)
     ).filter(a => a > 0);
     const budgetGai = last12Months.map(({ year, month }) =>
-      transactions.filter(t => t.year === year && t.month === month && t.type === 'income' && t.budgetType === '予算外')
-        .reduce((s, t) => s + t.amount, 0)
+      transactions.filter(t => {
+        if (t.year !== year || t.month !== month || t.type !== 'income') return false;
+        const effective = t.budgetType || getTagForCategory('income', t.subcategory).budgetType;
+        return effective === '予算外';
+      }).reduce((s, t) => s + t.amount, 0)
     ).filter(a => a > 0);
 
     return {

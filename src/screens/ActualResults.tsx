@@ -4,7 +4,7 @@ import { useApp } from '../contexts/AppContext';
 import { Transaction, TransactionType } from '../types';
 import MoneyForwardImport from '../components/MoneyForwardImport';
 import { saveCategoryRule } from '../lib/categoryRules';
-import { getMajorCategories, getMinorCategories } from '../lib/categoryConfig';
+import { getMajorCategories, getMinorCategories, getTagForCategory } from '../lib/categoryConfig';
 import CategorySettings from '../components/CategorySettings';
 
 const MF_CATEGORY_COLORS: Record<string, string> = {
@@ -44,6 +44,7 @@ interface ReclassifyState {
   tx: Transaction;
   type: TransactionType;
   subcategory: string;
+  minorCategory: string;
 }
 
 export default function ActualResults() {
@@ -126,14 +127,14 @@ export default function ActualResults() {
   }
 
   function openReclassify(tx: Transaction) {
-    setReclassify({ tx, type: tx.type, subcategory: tx.subcategory });
+    setReclassify({ tx, type: tx.type, subcategory: tx.subcategory, minorCategory: tx.minorCategory || '' });
     setApplyToAll(false);
   }
 
   function handleReclassify() {
     if (!reclassify) return;
-    const { tx, type, subcategory } = reclassify;
-    const update = (t: Transaction) => updateTransaction({ ...t, type, category: subcategory, subcategory });
+    const { tx, type, subcategory, minorCategory } = reclassify;
+    const update = (t: Transaction) => updateTransaction({ ...t, type, category: subcategory, subcategory, minorCategory: minorCategory || undefined });
     update(tx);
     if (applyToAll) {
       transactions.filter(t => t.itemName === tx.itemName && t.id !== tx.id).forEach(update);
@@ -420,7 +421,15 @@ export default function ActualResults() {
                 <label className="text-xs text-gray-500 mb-1 block">大分類</label>
                 <select
                   value={form.subcategory}
-                  onChange={e => { setForm(f => ({ ...f, subcategory: e.target.value })); setMinorCategory(''); }}
+                  onChange={e => {
+                    const newSubcat = e.target.value;
+                    setForm(f => ({ ...f, subcategory: newSubcat }));
+                    setMinorCategory('');
+                    // Auto-fill from category config
+                    const tags = getTagForCategory(form.type, newSubcat);
+                    if (tags.expenseType && !expenseType) setExpenseType(tags.expenseType as '毎月固定'|'毎月変動'|'不定期固定'|'不定期変動');
+                    if (tags.budgetType && !budgetType) setBudgetType(tags.budgetType as '予算内'|'予算外');
+                  }}
                   className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white"
                 >
                   <option value="">選択してください</option>
@@ -539,7 +548,7 @@ export default function ActualResults() {
                 <label className="text-xs text-gray-500 mb-1 block">大分類</label>
                 <select
                   value={reclassify.subcategory}
-                  onChange={e => setReclassify(r => r ? { ...r, subcategory: e.target.value } : r)}
+                  onChange={e => setReclassify(r => r ? { ...r, subcategory: e.target.value, minorCategory: '' } : r)}
                   className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white"
                 >
                   <option value="">選択してください</option>
@@ -548,6 +557,21 @@ export default function ActualResults() {
                   ))}
                 </select>
               </div>
+              {getMinorCategories(reclassify.type, reclassify.subcategory).length > 0 && (
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">中分類</label>
+                  <select
+                    value={reclassify.minorCategory}
+                    onChange={e => setReclassify(r => r ? { ...r, minorCategory: e.target.value } : r)}
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white"
+                  >
+                    <option value="">選択してください</option>
+                    {getMinorCategories(reclassify.type, reclassify.subcategory).map(sub => (
+                      <option key={sub} value={sub}>{sub}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <label className="flex items-center gap-3 cursor-pointer">
                 <input type="checkbox" checked={applyToAll} onChange={e => setApplyToAll(e.target.checked)} className="rounded text-indigo-600 w-4 h-4" />
                 <div>

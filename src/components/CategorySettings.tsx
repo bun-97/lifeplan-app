@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { CategoryConfig, CategoryNode, getCategoryConfig, saveCategoryConfig } from '../lib/categoryConfig';
 
 interface Props {
@@ -13,6 +13,9 @@ export default function CategorySettings({ onClose }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [newMajorName, setNewMajorName] = useState('');
   const [newMinorName, setNewMinorName] = useState<Record<string, string>>({});
+
+  const majorComposingRef = useRef(false);
+  const minorComposingRef = useRef(false);
 
   const nodes: CategoryNode[] = config[tab];
 
@@ -54,6 +57,20 @@ export default function CategorySettings({ onClose }: Props) {
     });
   }
 
+  function setExpenseType(nodeId: string, val: string) {
+    saveConfig({
+      ...config,
+      [tab]: nodes.map(n => n.id === nodeId ? { ...n, expenseType: (val || undefined) as CategoryNode['expenseType'] } : n),
+    });
+  }
+
+  function setBudgetType(nodeId: string, val: string) {
+    saveConfig({
+      ...config,
+      [tab]: nodes.map(n => n.id === nodeId ? { ...n, budgetType: (val || undefined) as CategoryNode['budgetType'] } : n),
+    });
+  }
+
   const TAB_LABELS: Record<CTab, string> = { income: '収入', expense: '支出', investment: '投資・貯金' };
 
   return (
@@ -87,6 +104,12 @@ export default function CategorySettings({ onClose }: Props) {
                 {node.name}
                 <span className="ml-2 text-xs text-gray-400">{node.subcategories.length > 0 ? `(${node.subcategories.length})` : ''}</span>
               </button>
+              {tab === 'expense' && node.expenseType && (
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 mr-1">{node.expenseType}</span>
+              )}
+              {tab === 'income' && node.budgetType && (
+                <span className={`text-xs px-1.5 py-0.5 rounded-full mr-1 ${node.budgetType === '予算内' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>{node.budgetType}</span>
+              )}
               <button
                 onClick={() => {
                   const newName = window.prompt('大分類名を変更', node.name);
@@ -101,6 +124,36 @@ export default function CategorySettings({ onClose }: Props) {
             </div>
             {expandedId === node.id && (
               <div className="px-3 py-2 space-y-1.5 bg-white">
+                {tab === 'expense' && (
+                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                    <span className="text-xs text-gray-500 shrink-0">支出分類:</span>
+                    <select
+                      value={node.expenseType ?? ''}
+                      onChange={e => setExpenseType(node.id, e.target.value)}
+                      className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white flex-1"
+                    >
+                      <option value="">未設定</option>
+                      <option value="毎月固定">毎月固定</option>
+                      <option value="毎月変動">毎月変動</option>
+                      <option value="不定期固定">不定期固定</option>
+                      <option value="不定期変動">不定期変動</option>
+                    </select>
+                  </div>
+                )}
+                {tab === 'income' && (
+                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
+                    <span className="text-xs text-gray-500 shrink-0">予算区分:</span>
+                    <select
+                      value={node.budgetType ?? ''}
+                      onChange={e => setBudgetType(node.id, e.target.value)}
+                      className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white flex-1"
+                    >
+                      <option value="">未設定</option>
+                      <option value="予算内">予算内</option>
+                      <option value="予算外">予算外</option>
+                    </select>
+                  </div>
+                )}
                 {node.subcategories.map(sub => (
                   <div key={sub} className="flex items-center justify-between py-1 border-b border-gray-100">
                     <span className="text-sm text-gray-700">{sub}</span>
@@ -114,7 +167,9 @@ export default function CategorySettings({ onClose }: Props) {
                     value={newMinorName[node.id] ?? ''}
                     onChange={e => setNewMinorName(prev => ({ ...prev, [node.id]: e.target.value }))}
                     className="flex-1 text-sm border border-gray-300 rounded-lg px-2 py-1.5"
-                    onKeyDown={e => e.key === 'Enter' && addMinor(node.id)}
+                    onCompositionStart={() => { minorComposingRef.current = true; }}
+                    onCompositionEnd={() => { minorComposingRef.current = false; }}
+                    onKeyDown={e => { if (e.key === 'Enter' && !minorComposingRef.current) { addMinor(node.id); } }}
                   />
                   <button onClick={() => addMinor(node.id)} className="text-sm bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg">追加</button>
                 </div>
@@ -130,7 +185,9 @@ export default function CategorySettings({ onClose }: Props) {
             value={newMajorName}
             onChange={e => setNewMajorName(e.target.value)}
             className="flex-1 text-sm border border-gray-300 rounded-xl px-3 py-2"
-            onKeyDown={e => e.key === 'Enter' && addMajor()}
+            onCompositionStart={() => { majorComposingRef.current = true; }}
+            onCompositionEnd={() => { majorComposingRef.current = false; }}
+            onKeyDown={e => { if (e.key === 'Enter' && !majorComposingRef.current) { addMajor(); } }}
           />
           <button onClick={addMajor} className="bg-indigo-600 text-white text-sm px-4 py-2 rounded-xl">追加</button>
         </div>
