@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { TransactionType, Transaction, ImportHistory } from '../types';
-import { getCategoryRules } from '../lib/categoryRules';
+import { findMatchingRule, autoClassify } from '../lib/categoryRules';
 import { v4 as uuidv4 } from 'uuid';
 
 const IMPORT_HISTORY_KEY = 'lifeplan_import_history';
@@ -39,6 +39,8 @@ interface ParsedRow {
   nearDuplicateInfo?: string;
   autoExcluded: boolean;
   userExcludeDecision?: 'import' | 'skip';
+  isAutoClassified?: boolean;
+  autoClassifiedKeyword?: string;
 }
 
 // 大項目・中項目から種別を判定
@@ -105,11 +107,24 @@ function parseData(text: string): ParsedRow[] {
     let category = detectCategory(type, bigCat, midCat);
     let subcategory = midCat || bigCat || '';
 
-    const rule = getCategoryRules()[content];
+    let isAutoClassified = false;
+    let autoClassifiedKeyword: string | undefined;
+
+    // 1. 学習済みルール（正規化・部分一致対応）
+    const rule = findMatchingRule(content);
     if (rule) {
       type = rule.type;
       category = rule.category;
       subcategory = rule.subcategory;
+    } else {
+      // 2. AIルールベース自動分類（提案として適用）
+      const aiResult = autoClassify(content);
+      if (aiResult && type === 'expense') {
+        category = aiResult.category;
+        subcategory = aiResult.subcategory;
+        isAutoClassified = true;
+        autoClassifiedKeyword = aiResult.matchedKeyword;
+      }
     }
 
     results.push({
@@ -128,6 +143,8 @@ function parseData(text: string): ParsedRow[] {
       isDuplicate: false,
       isNearDuplicate: false,
       autoExcluded: false,
+      isAutoClassified,
+      autoClassifiedKeyword,
     });
   }
 
@@ -471,7 +488,14 @@ export default function MoneyForwardImport({ onClose }: Props) {
                           {row.autoExcluded && <span className="text-xs text-orange-500 bg-orange-50 px-1 rounded">集計対象外</span>}
                         </div>
                         <p className="text-sm font-medium text-gray-800 truncate">{row.content}</p>
-                        <p className="text-xs text-gray-500 truncate">{row.category} ／ {row.subcategory}</p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-xs text-gray-500">{row.category} ／ {row.subcategory}</p>
+                          {row.isAutoClassified && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-600 font-medium border border-violet-100">
+                              ✨ AI提案
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <span className={`text-sm font-bold whitespace-nowrap ${TYPE_AMOUNT_COLOR[row.type]}`}>
                         {row.amount.toLocaleString()}円
