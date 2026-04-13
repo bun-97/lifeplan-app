@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 
 function fmt(n: number): string {
@@ -98,28 +98,94 @@ export default function Home() {
   const currentInvestment = currentMonthTx.filter(t => t.type === 'investment').reduce((s, t) => s + t.amount, 0);
   const currentExpenseRate = currentIncome > 0 ? Math.round(currentExpense / currentIncome * 100) : 0;
 
+  const [showRateDetail, setShowRateDetail] = useState(false);
+
+  // Monthly detail data for rate detail screen
+  const monthlyRateDetail = useMemo(() => {
+    return last12Months.map(({ year, month }) => {
+      const monthTx = transactions.filter(t => t.year === year && t.month === month && !t.excluded);
+      const income = monthTx.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+      const expense = monthTx.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+      const rate = income > 0 ? Math.round(expense / income * 100) : null;
+      return { year, month, income, expense, rate, hasData: income > 0 || expense > 0 };
+    }).filter(m => m.hasData).reverse();
+  }, [last12Months, transactions]);
+
   if (!currentProfile) {
     return <div className="flex items-center justify-center h-64"><p className="text-gray-500">プロファイルを作成してください</p></div>;
+  }
+
+  // ===== RATE DETAIL SCREEN =====
+  if (showRateDetail) {
+    return (
+      <div className="w-full p-4 space-y-4">
+        <div className="flex items-center gap-3">
+          <button onClick={() => setShowRateDetail(false)} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+            </svg>
+          </button>
+          <h2 className="text-base font-semibold text-gray-800">月別支出率（過去12ヶ月）</h2>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="text-left text-xs text-gray-500 font-medium px-4 py-2.5">月</th>
+                <th className="text-right text-xs text-gray-500 font-medium px-4 py-2.5">支出率</th>
+                <th className="text-right text-xs text-gray-500 font-medium px-4 py-2.5">支出額</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {monthlyRateDetail.map(({ year, month, expense, rate }) => {
+                const over80 = rate !== null && rate >= 80;
+                return (
+                  <tr key={`${year}-${month}`} className={over80 ? 'bg-red-50' : ''}>
+                    <td className="px-4 py-3 text-sm text-gray-700">{year}年{month}月</td>
+                    <td className={`px-4 py-3 text-sm font-bold text-right ${over80 ? 'text-red-500' : 'text-gray-800'}`}>
+                      {rate !== null ? `${rate}%` : '—'}
+                    </td>
+                    <td className={`px-4 py-3 text-sm font-semibold text-right ${over80 ? 'text-red-400' : 'text-gray-600'}`}>
+                      {fmt(expense)}
+                    </td>
+                  </tr>
+                );
+              })}
+              {monthlyRateDetail.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="px-4 py-8 text-center text-sm text-gray-400">データがありません</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="w-full p-4 space-y-4">
 
       {/* ===== AVERAGE RATE: top large display ===== */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
-        <p className="text-xs text-gray-400 mb-2">直近12か月 平均支出率</p>
+      <button
+        onClick={() => setShowRateDetail(true)}
+        className="w-full bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center active:bg-gray-50 transition-colors"
+      >
+        <p className="text-xs text-gray-400 mb-2">過去12ヶ月の平均支出率</p>
         {avgRate === null ? (
           <p className="text-4xl font-bold text-gray-300">データなし</p>
         ) : (
-          <div className={`flex items-end justify-center gap-1 ${avgRate >= 80 ? 'text-red-500' : 'text-gray-800'}`}>
-            <span className="text-6xl font-bold leading-none">{avgRate}</span>
-            <span className="text-3xl font-semibold leading-none mb-1">%</span>
+          <div className="flex justify-center">
+            <div className={`relative inline-block ${avgRate >= 80 ? 'text-red-500' : 'text-gray-800'}`}>
+              <span className="text-6xl font-bold leading-none">{avgRate}</span>
+              <span className="text-3xl font-semibold absolute -right-8 bottom-1">%</span>
+            </div>
           </div>
         )}
-        <p className="text-xs text-gray-400 mt-2">
-          {monthsWithData.length > 0 ? `${monthsWithData.length}か月分のデータ` : 'まだデータがありません'}
+        <p className="text-xs text-gray-400 mt-3">
+          {monthsWithData.length > 0 ? '過去12ヶ月の平均支出率' : 'まだデータがありません'}
         </p>
-      </div>
+      </button>
 
       {/* ===== STAT CARDS ===== */}
       <div className="grid grid-cols-2 gap-3">
