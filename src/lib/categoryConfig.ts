@@ -97,6 +97,7 @@ export function getEffectiveTag(
   const node = getMajorCategories(type).find(n => n.name === majorName);
   if (!node) return {};
 
+  // ⑤ Subcategory-first: check the specified minor category
   if (minorName) {
     const sub = node.subcategories.find(s => s.name === minorName);
     if (sub && (sub.expenseType || sub.budgetType)) {
@@ -104,7 +105,13 @@ export function getEffectiveTag(
     }
   }
 
-  // Fall back to major category
+  // ⑤ If no minorName, look for the auto-created subcategory (same name as major)
+  const autoSub = node.subcategories.find(s => s.name === node.name);
+  if (autoSub && (autoSub.expenseType || autoSub.budgetType)) {
+    return { expenseType: autoSub.expenseType, budgetType: autoSub.budgetType };
+  }
+
+  // ⑤ Fall back to major category setting as reference only (not primary source)
   return { expenseType: node.expenseType, budgetType: node.budgetType };
 }
 

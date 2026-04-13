@@ -15,36 +15,65 @@ export default function CategorySettings({ onClose }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [newMajorName, setNewMajorName] = useState('');
   const [newMinorName, setNewMinorName] = useState<Record<string, string>>({});
-  const [bulkSetId, setBulkSetId] = useState<string | null>(null);
-  const [bulkSetValue, setBulkSetValue] = useState('');
+  const [editingMinor, setEditingMinor] = useState<{ nodeId: string; subName: string; value: string } | null>(null);
   const [pendingChange, setPendingChange] = useState<{
     nodeId: string;
     subName?: string;
     field: 'expenseType' | 'budgetType';
     value: string;
+    newConfig: CategoryConfig;
   } | null>(null);
 
   const majorComposingRef = useRef(false);
   const minorComposingRef = useRef(false);
+  const renameComposingRef = useRef(false);
 
   const nodes: CategoryNode[] = config[tab];
 
-  function applyTypeChange(nodeId: string, subName: string | undefined, field: 'expenseType' | 'budgetType', value: string, newConfig: CategoryConfig) {
+  // ④ When expanding a node with no subcategories, auto-create one with the same name
+  function handleExpand(nodeId: string) {
+    if (expandedId === nodeId) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(nodeId);
+    const node = config[tab].find(n => n.id === nodeId);
+    if (node && node.subcategories.length === 0) {
+      const newSub: SubcategoryNode = {
+        name: node.name,
+        expenseType: tab === 'expense' ? node.expenseType : undefined,
+        budgetType: tab === 'income' ? node.budgetType : undefined,
+      };
+      const newConfig = {
+        ...config,
+        [tab]: config[tab].map(n => n.id === nodeId ? { ...n, subcategories: [newSub] } : n),
+      };
+      setConfig(newConfig);
+      saveCategoryConfig(newConfig);
+    }
+  }
+
+  function applyTypeChange(
+    nodeId: string,
+    subName: string | undefined,
+    field: 'expenseType' | 'budgetType',
+    value: string,
+    newConfig: CategoryConfig
+  ) {
     setConfig(newConfig);
     saveCategoryConfig(newConfig);
-    setPendingChange({ nodeId, subName, field, value });
+    setPendingChange({ nodeId, subName, field, value, newConfig });
   }
 
   function confirmRetroactive() {
     if (!pendingChange) return;
-    const { subName, field, value } = pendingChange;
-    const node = config[tab].find(n => n.id === pendingChange.nodeId);
+    const { subName, field, value, newConfig } = pendingChange;
+    const node = newConfig[tab].find(n => n.id === pendingChange.nodeId);
     if (!node) { setPendingChange(null); return; }
 
     transactions.forEach(t => {
       const subcategoryMatches = t.subcategory === node.name;
       const minorMatches = subName ? t.minorCategory === subName : true;
-
       if (subcategoryMatches && minorMatches) {
         updateTransaction({ ...t, [field]: value || undefined });
       }
@@ -102,20 +131,35 @@ export default function CategorySettings({ onClose }: Props) {
     saveCategoryConfig(newConfig);
   }
 
-  function handleMajorExpenseTypeChange(nodeId: string, value: string) {
+  function saveRenameMinor() {
+    if (!editingMinor) return;
+    const { nodeId, subName, value } = editingMinor;
+    const newName = value.trim();
+    if (!newName || newName === subName) { setEditingMinor(null); return; }
     const newConfig = {
       ...config,
-      [tab]: config[tab].map(n => n.id === nodeId ? { ...n, expenseType: (value as CategoryNode['expenseType']) || undefined } : n),
+      [tab]: nodes.map(n => n.id === nodeId ? {
+        ...n,
+        subcategories: n.subcategories.map(s => s.name === subName ? { ...s, name: newName } : s)
+      } : n),
     };
-    applyTypeChange(nodeId, undefined, 'expenseType', value, newConfig);
+    setConfig(newConfig);
+    saveCategoryConfig(newConfig);
+    setEditingMinor(null);
   }
 
-  function handleMajorBudgetTypeChange(nodeId: string, value: string) {
+  // ① 一括設定: applied from expanded section, sets all subcategories
+  function applyBulkSet(nodeId: string, value: string) {
+    if (!value) return;
+    const field = tab === 'income' ? 'budgetType' : 'expenseType';
     const newConfig = {
       ...config,
-      [tab]: config[tab].map(n => n.id === nodeId ? { ...n, budgetType: (value as CategoryNode['budgetType']) || undefined } : n),
+      [tab]: config[tab].map(n => n.id === nodeId ? {
+        ...n,
+        subcategories: n.subcategories.map(s => ({ ...s, [field]: value }))
+      } : n)
     };
-    applyTypeChange(nodeId, undefined, 'budgetType', value, newConfig);
+    applyTypeChange(nodeId, undefined, field as 'expenseType' | 'budgetType', value, newConfig);
   }
 
   function handleSubExpenseTypeChange(nodeId: string, subIndex: number, value: string) {
@@ -148,23 +192,8 @@ export default function CategorySettings({ onClose }: Props) {
     applyTypeChange(nodeId, subName, 'budgetType', value, newConfig);
   }
 
-  function applyBulkSet(nodeId: string) {
-    if (!bulkSetValue) return;
-    const field = tab === 'income' ? 'budgetType' : 'expenseType';
-    const newConfig = {
-      ...config,
-      [tab]: config[tab].map(n => n.id === nodeId ? {
-        ...n,
-        subcategories: n.subcategories.map(s => ({
-          ...s,
-          [field]: bulkSetValue,
-        }))
-      } : n)
-    };
-    applyTypeChange(nodeId, undefined, field as 'expenseType' | 'budgetType', bulkSetValue, newConfig);
-    setBulkSetId(null);
-    setBulkSetValue('');
-  }
+  const TYPE_OPTIONS_EXPENSE = ['毎月固定', '毎月変動', '不定期固定', '不定期変動'];
+  const TYPE_OPTIONS_INCOME = ['予算内', '予算外'];
 
   const TAB_LABELS: Record<CTab, string> = { income: '収入', expense: '支出', investment: '投資・貯金' };
 
@@ -191,126 +220,117 @@ export default function CategorySettings({ onClose }: Props) {
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {nodes.map(node => (
           <div key={node.id} className="border border-gray-200 rounded-xl overflow-hidden">
+            {/* Major category header — ② income badge removed, ① 一括設定 button removed */}
             <div className="flex items-center px-3 py-2.5 bg-gray-50">
               <button
                 className="flex-1 text-left text-sm font-medium text-gray-800"
-                onClick={() => setExpandedId(expandedId === node.id ? null : node.id)}
+                onClick={() => handleExpand(node.id)}
               >
                 {node.name}
-                <span className="ml-2 text-xs text-gray-400">{node.subcategories.length > 0 ? `(${node.subcategories.length})` : ''}</span>
+                <span className="ml-2 text-xs text-gray-400">
+                  {node.subcategories.length > 0 ? `(${node.subcategories.length})` : ''}
+                </span>
               </button>
+              {/* ② expense badge kept as reference-only, income badge removed */}
               {tab === 'expense' && node.expenseType && (
-                <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 mr-1">{node.expenseType}</span>
+                <span className="text-xs px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-600 mr-1">
+                  {node.expenseType}
+                </span>
               )}
-              {tab === 'income' && node.budgetType && (
-                <span className={`text-xs px-1.5 py-0.5 rounded-full mr-1 ${node.budgetType === '予算内' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>{node.budgetType}</span>
-              )}
-              <button
-                onClick={e => { e.stopPropagation(); setBulkSetId(node.id); setBulkSetValue(''); }}
-                className="text-xs text-indigo-500 px-2 hover:underline"
-              >一括設定</button>
               <button
                 onClick={() => {
                   const newName = window.prompt('大分類名を変更', node.name);
                   if (newName && newName.trim()) renameMajor(node.id, newName.trim());
                 }}
                 className="text-gray-400 text-xs px-2"
-              >
-                編集
-              </button>
+              >編集</button>
               <button onClick={() => deleteMajor(node.id)} className="text-red-400 text-xs px-2">削除</button>
-              <span className="text-gray-400 text-xs">{expandedId === node.id ? '▲' : '▼'}</span>
+              <span
+                className="text-gray-400 text-xs cursor-pointer"
+                onClick={() => handleExpand(node.id)}
+              >{expandedId === node.id ? '▲' : '▼'}</span>
             </div>
-            {bulkSetId === node.id && (
-              <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border-t border-indigo-100">
-                <span className="text-xs text-indigo-700 shrink-0">中分類を一括:</span>
-                <select
-                  value={bulkSetValue}
-                  onChange={e => setBulkSetValue(e.target.value)}
-                  className="flex-1 text-xs border border-indigo-200 rounded-lg px-2 py-1.5 bg-white"
-                >
-                  <option value="">選択してください</option>
-                  {tab === 'expense' && <>
-                    <option value="毎月固定">毎月固定</option>
-                    <option value="毎月変動">毎月変動</option>
-                    <option value="不定期固定">不定期固定</option>
-                    <option value="不定期変動">不定期変動</option>
-                  </>}
-                  {tab === 'income' && <>
-                    <option value="予算内">予算内</option>
-                    <option value="予算外">予算外</option>
-                  </>}
-                </select>
-                <button
-                  onClick={() => applyBulkSet(node.id)}
-                  disabled={!bulkSetValue}
-                  className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg disabled:opacity-40"
-                >適用</button>
-                <button onClick={() => setBulkSetId(null)} className="text-xs text-gray-500">✕</button>
-              </div>
-            )}
+
             {expandedId === node.id && (
               <div className="px-3 py-2 space-y-1.5 bg-white">
-                {tab === 'expense' && (
+                {/* ① 一括設定 row (replaces the old major expenseType/budgetType row) */}
+                {(tab === 'expense' || tab === 'income') && (
                   <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                    <span className="text-xs text-gray-500 shrink-0">支出分類:</span>
+                    <span className="text-xs text-gray-500 shrink-0">一括設定:</span>
                     <select
-                      value={node.expenseType ?? ''}
-                      onChange={e => handleMajorExpenseTypeChange(node.id, e.target.value)}
-                      className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white flex-1"
+                      defaultValue=""
+                      onChange={e => { if (e.target.value) { applyBulkSet(node.id, e.target.value); e.target.value = ''; } }}
+                      className="text-xs border border-indigo-200 rounded-lg px-2 py-1 bg-white flex-1 text-indigo-700"
                     >
-                      <option value="">未設定</option>
-                      <option value="毎月固定">毎月固定</option>
-                      <option value="毎月変動">毎月変動</option>
-                      <option value="不定期固定">不定期固定</option>
-                      <option value="不定期変動">不定期変動</option>
+                      <option value="">分類を選んで全中分類に適用</option>
+                      {(tab === 'expense' ? TYPE_OPTIONS_EXPENSE : TYPE_OPTIONS_INCOME).map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
                     </select>
                   </div>
                 )}
-                {tab === 'income' && (
-                  <div className="flex items-center gap-2 pb-2 border-b border-gray-100">
-                    <span className="text-xs text-gray-500 shrink-0">予算区分:</span>
-                    <select
-                      value={node.budgetType ?? ''}
-                      onChange={e => handleMajorBudgetTypeChange(node.id, e.target.value)}
-                      className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white flex-1"
-                    >
-                      <option value="">未設定</option>
-                      <option value="予算内">予算内</option>
-                      <option value="予算外">予算外</option>
-                    </select>
-                  </div>
-                )}
+
+                {/* ③ Subcategory rows with edit button */}
                 {node.subcategories.map((sub, si) => (
-                  <div key={sub.name} className="flex items-center gap-2 py-1.5 border-b border-gray-100">
-                    <span className="text-sm text-gray-700 flex-1">{sub.name}</span>
-                    {tab === 'expense' && (
-                      <select
-                        value={sub.expenseType ?? ''}
-                        onChange={e => handleSubExpenseTypeChange(node.id, si, e.target.value)}
-                        className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 bg-white"
-                      >
-                        <option value="">－</option>
-                        <option value="毎月固定">毎月固定</option>
-                        <option value="毎月変動">毎月変動</option>
-                        <option value="不定期固定">不定期固定</option>
-                        <option value="不定期変動">不定期変動</option>
-                      </select>
+                  <div key={sub.name} className="border-b border-gray-100">
+                    {editingMinor?.nodeId === node.id && editingMinor.subName === sub.name ? (
+                      /* Inline rename input */
+                      <div className="flex items-center gap-2 py-1.5">
+                        <input
+                          type="text"
+                          value={editingMinor.value}
+                          autoFocus
+                          onChange={e => setEditingMinor(prev => prev ? { ...prev, value: e.target.value } : null)}
+                          onCompositionStart={() => { renameComposingRef.current = true; }}
+                          onCompositionEnd={() => { renameComposingRef.current = false; }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && !renameComposingRef.current) saveRenameMinor();
+                            if (e.key === 'Escape') setEditingMinor(null);
+                          }}
+                          className="flex-1 text-sm border border-indigo-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                        />
+                        <button onClick={saveRenameMinor} className="text-indigo-600 text-xs font-medium">保存</button>
+                        <button onClick={() => setEditingMinor(null)} className="text-gray-400 text-xs">✕</button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 py-1.5">
+                        <span className="text-sm text-gray-700 flex-1">{sub.name}</span>
+                        {tab === 'expense' && (
+                          <select
+                            value={sub.expenseType ?? ''}
+                            onChange={e => handleSubExpenseTypeChange(node.id, si, e.target.value)}
+                            className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 bg-white"
+                          >
+                            <option value="">－</option>
+                            {TYPE_OPTIONS_EXPENSE.map(opt => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
+                        )}
+                        {tab === 'income' && (
+                          <select
+                            value={sub.budgetType ?? ''}
+                            onChange={e => handleSubBudgetTypeChange(node.id, si, e.target.value)}
+                            className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 bg-white"
+                          >
+                            <option value="">－</option>
+                            {TYPE_OPTIONS_INCOME.map(opt => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
+                        )}
+                        {/* ③ Edit button */}
+                        <button
+                          onClick={() => setEditingMinor({ nodeId: node.id, subName: sub.name, value: sub.name })}
+                          className="text-gray-400 text-xs hover:text-indigo-500"
+                        >編集</button>
+                        <button onClick={() => deleteMinor(node.id, sub.name)} className="text-red-400 text-xs">削除</button>
+                      </div>
                     )}
-                    {tab === 'income' && (
-                      <select
-                        value={sub.budgetType ?? ''}
-                        onChange={e => handleSubBudgetTypeChange(node.id, si, e.target.value)}
-                        className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 bg-white"
-                      >
-                        <option value="">－</option>
-                        <option value="予算内">予算内</option>
-                        <option value="予算外">予算外</option>
-                      </select>
-                    )}
-                    <button onClick={() => deleteMinor(node.id, sub.name)} className="text-red-400 text-xs shrink-0">削除</button>
                   </div>
                 ))}
+
+                {/* Add minor */}
                 <div className="flex gap-2 pt-1">
                   <input
                     type="text"
@@ -328,6 +348,7 @@ export default function CategorySettings({ onClose }: Props) {
             )}
           </div>
         ))}
+
         {/* Add major */}
         <div className="flex gap-2 pt-2">
           <input
@@ -344,14 +365,14 @@ export default function CategorySettings({ onClose }: Props) {
         </div>
       </div>
 
-      {/* Retroactive apply confirmation dialog */}
+      {/* ③ Retroactive apply confirmation */}
       {pendingChange && (
         <div className="fixed inset-0 bg-black/50 z-[60] flex items-end justify-center">
           <div className="bg-white rounded-t-2xl w-full p-4 space-y-3">
             <h3 className="font-semibold text-gray-800 text-sm">既存の明細にも反映しますか？</h3>
             <p className="text-xs text-gray-500">
-              「{config[tab].find(n => n.id === pendingChange.nodeId)?.name}
-              {pendingChange.subName ? ` ＞ ${pendingChange.subName}` : ''}」の
+              「{pendingChange.newConfig[tab].find(n => n.id === pendingChange.nodeId)?.name}
+              {pendingChange.subName ? ` ＞ ${pendingChange.subName}` : ' の全中分類'}」の
               分類を「{pendingChange.value}」に変更しました。
             </p>
             <p className="text-xs text-gray-500">過去の明細データにも一括で反映しますか？</p>
