@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
-import { CategoryConfig, CategoryNode, getCategoryConfig, saveCategoryConfig } from '../lib/categoryConfig';
+import { CategoryConfig, CategoryNode, SubcategoryNode, getCategoryConfig, saveCategoryConfig } from '../lib/categoryConfig';
+import { useApp } from '../contexts/AppContext';
 
 interface Props {
   onClose: () => void;
@@ -8,67 +9,161 @@ interface Props {
 type CTab = 'income' | 'expense' | 'investment';
 
 export default function CategorySettings({ onClose }: Props) {
+  const { transactions, updateTransaction } = useApp();
   const [config, setConfig] = useState<CategoryConfig>(getCategoryConfig());
   const [tab, setTab] = useState<CTab>('expense');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [newMajorName, setNewMajorName] = useState('');
   const [newMinorName, setNewMinorName] = useState<Record<string, string>>({});
+  const [bulkSetId, setBulkSetId] = useState<string | null>(null);
+  const [bulkSetValue, setBulkSetValue] = useState('');
+  const [pendingChange, setPendingChange] = useState<{
+    nodeId: string;
+    subName?: string;
+    field: 'expenseType' | 'budgetType';
+    value: string;
+  } | null>(null);
 
   const majorComposingRef = useRef(false);
   const minorComposingRef = useRef(false);
 
   const nodes: CategoryNode[] = config[tab];
 
-  function saveConfig(next: CategoryConfig) {
-    setConfig(next);
-    saveCategoryConfig(next);
+  function applyTypeChange(nodeId: string, subName: string | undefined, field: 'expenseType' | 'budgetType', value: string, newConfig: CategoryConfig) {
+    setConfig(newConfig);
+    saveCategoryConfig(newConfig);
+    setPendingChange({ nodeId, subName, field, value });
+  }
+
+  function confirmRetroactive() {
+    if (!pendingChange) return;
+    const { subName, field, value } = pendingChange;
+    const node = config[tab].find(n => n.id === pendingChange.nodeId);
+    if (!node) { setPendingChange(null); return; }
+
+    transactions.forEach(t => {
+      const subcategoryMatches = t.subcategory === node.name;
+      const minorMatches = subName ? t.minorCategory === subName : true;
+
+      if (subcategoryMatches && minorMatches) {
+        updateTransaction({ ...t, [field]: value || undefined });
+      }
+    });
+
+    setPendingChange(null);
   }
 
   function addMajor() {
     const name = newMajorName.trim();
     if (!name) return;
     const id = `${tab}-${Date.now()}`;
-    saveConfig({ ...config, [tab]: [...nodes, { id, name, subcategories: [] }] });
+    const newConfig = { ...config, [tab]: [...nodes, { id, name, subcategories: [] }] };
+    setConfig(newConfig);
+    saveCategoryConfig(newConfig);
     setNewMajorName('');
   }
 
   function deleteMajor(id: string) {
-    saveConfig({ ...config, [tab]: nodes.filter(n => n.id !== id) });
+    const newConfig = { ...config, [tab]: nodes.filter(n => n.id !== id) };
+    setConfig(newConfig);
+    saveCategoryConfig(newConfig);
   }
 
   function renameMajor(id: string, name: string) {
-    saveConfig({ ...config, [tab]: nodes.map(n => n.id === id ? { ...n, name } : n) });
+    const newConfig = { ...config, [tab]: nodes.map(n => n.id === id ? { ...n, name } : n) };
+    setConfig(newConfig);
+    saveCategoryConfig(newConfig);
   }
 
   function addMinor(nodeId: string) {
     const name = (newMinorName[nodeId] ?? '').trim();
     if (!name) return;
-    saveConfig({
+    const parent = nodes.find(n => n.id === nodeId);
+    const newSub: SubcategoryNode = {
+      name,
+      expenseType: tab === 'expense' ? parent?.expenseType : undefined,
+      budgetType: tab === 'income' ? parent?.budgetType : undefined,
+    };
+    const newConfig = {
       ...config,
-      [tab]: nodes.map(n => n.id === nodeId ? { ...n, subcategories: [...n.subcategories, name] } : n),
-    });
+      [tab]: nodes.map(n => n.id === nodeId ? { ...n, subcategories: [...n.subcategories, newSub] } : n),
+    };
+    setConfig(newConfig);
+    saveCategoryConfig(newConfig);
     setNewMinorName(prev => ({ ...prev, [nodeId]: '' }));
   }
 
-  function deleteMinor(nodeId: string, sub: string) {
-    saveConfig({
+  function deleteMinor(nodeId: string, subName: string) {
+    const newConfig = {
       ...config,
-      [tab]: nodes.map(n => n.id === nodeId ? { ...n, subcategories: n.subcategories.filter(s => s !== sub) } : n),
-    });
+      [tab]: nodes.map(n => n.id === nodeId ? { ...n, subcategories: n.subcategories.filter(s => s.name !== subName) } : n),
+    };
+    setConfig(newConfig);
+    saveCategoryConfig(newConfig);
   }
 
-  function setExpenseType(nodeId: string, val: string) {
-    saveConfig({
+  function handleMajorExpenseTypeChange(nodeId: string, value: string) {
+    const newConfig = {
       ...config,
-      [tab]: nodes.map(n => n.id === nodeId ? { ...n, expenseType: (val || undefined) as CategoryNode['expenseType'] } : n),
-    });
+      [tab]: config[tab].map(n => n.id === nodeId ? { ...n, expenseType: (value as CategoryNode['expenseType']) || undefined } : n),
+    };
+    applyTypeChange(nodeId, undefined, 'expenseType', value, newConfig);
   }
 
-  function setBudgetType(nodeId: string, val: string) {
-    saveConfig({
+  function handleMajorBudgetTypeChange(nodeId: string, value: string) {
+    const newConfig = {
       ...config,
-      [tab]: nodes.map(n => n.id === nodeId ? { ...n, budgetType: (val || undefined) as CategoryNode['budgetType'] } : n),
-    });
+      [tab]: config[tab].map(n => n.id === nodeId ? { ...n, budgetType: (value as CategoryNode['budgetType']) || undefined } : n),
+    };
+    applyTypeChange(nodeId, undefined, 'budgetType', value, newConfig);
+  }
+
+  function handleSubExpenseTypeChange(nodeId: string, subIndex: number, value: string) {
+    const newConfig = {
+      ...config,
+      [tab]: config[tab].map(n => n.id === nodeId ? {
+        ...n,
+        subcategories: n.subcategories.map((s, i) =>
+          i === subIndex ? { ...s, expenseType: (value as SubcategoryNode['expenseType']) || undefined } : s
+        )
+      } : n)
+    };
+    const node = config[tab].find(n => n.id === nodeId);
+    const subName = node?.subcategories[subIndex]?.name;
+    applyTypeChange(nodeId, subName, 'expenseType', value, newConfig);
+  }
+
+  function handleSubBudgetTypeChange(nodeId: string, subIndex: number, value: string) {
+    const newConfig = {
+      ...config,
+      [tab]: config[tab].map(n => n.id === nodeId ? {
+        ...n,
+        subcategories: n.subcategories.map((s, i) =>
+          i === subIndex ? { ...s, budgetType: (value as SubcategoryNode['budgetType']) || undefined } : s
+        )
+      } : n)
+    };
+    const node = config[tab].find(n => n.id === nodeId);
+    const subName = node?.subcategories[subIndex]?.name;
+    applyTypeChange(nodeId, subName, 'budgetType', value, newConfig);
+  }
+
+  function applyBulkSet(nodeId: string) {
+    if (!bulkSetValue) return;
+    const field = tab === 'income' ? 'budgetType' : 'expenseType';
+    const newConfig = {
+      ...config,
+      [tab]: config[tab].map(n => n.id === nodeId ? {
+        ...n,
+        subcategories: n.subcategories.map(s => ({
+          ...s,
+          [field]: bulkSetValue,
+        }))
+      } : n)
+    };
+    applyTypeChange(nodeId, undefined, field as 'expenseType' | 'budgetType', bulkSetValue, newConfig);
+    setBulkSetId(null);
+    setBulkSetValue('');
   }
 
   const TAB_LABELS: Record<CTab, string> = { income: '収入', expense: '支出', investment: '投資・貯金' };
@@ -111,6 +206,10 @@ export default function CategorySettings({ onClose }: Props) {
                 <span className={`text-xs px-1.5 py-0.5 rounded-full mr-1 ${node.budgetType === '予算内' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>{node.budgetType}</span>
               )}
               <button
+                onClick={e => { e.stopPropagation(); setBulkSetId(node.id); setBulkSetValue(''); }}
+                className="text-xs text-indigo-500 px-2 hover:underline"
+              >一括設定</button>
+              <button
                 onClick={() => {
                   const newName = window.prompt('大分類名を変更', node.name);
                   if (newName && newName.trim()) renameMajor(node.id, newName.trim());
@@ -122,6 +221,34 @@ export default function CategorySettings({ onClose }: Props) {
               <button onClick={() => deleteMajor(node.id)} className="text-red-400 text-xs px-2">削除</button>
               <span className="text-gray-400 text-xs">{expandedId === node.id ? '▲' : '▼'}</span>
             </div>
+            {bulkSetId === node.id && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50 border-t border-indigo-100">
+                <span className="text-xs text-indigo-700 shrink-0">中分類を一括:</span>
+                <select
+                  value={bulkSetValue}
+                  onChange={e => setBulkSetValue(e.target.value)}
+                  className="flex-1 text-xs border border-indigo-200 rounded-lg px-2 py-1.5 bg-white"
+                >
+                  <option value="">選択してください</option>
+                  {tab === 'expense' && <>
+                    <option value="毎月固定">毎月固定</option>
+                    <option value="毎月変動">毎月変動</option>
+                    <option value="不定期固定">不定期固定</option>
+                    <option value="不定期変動">不定期変動</option>
+                  </>}
+                  {tab === 'income' && <>
+                    <option value="予算内">予算内</option>
+                    <option value="予算外">予算外</option>
+                  </>}
+                </select>
+                <button
+                  onClick={() => applyBulkSet(node.id)}
+                  disabled={!bulkSetValue}
+                  className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg disabled:opacity-40"
+                >適用</button>
+                <button onClick={() => setBulkSetId(null)} className="text-xs text-gray-500">✕</button>
+              </div>
+            )}
             {expandedId === node.id && (
               <div className="px-3 py-2 space-y-1.5 bg-white">
                 {tab === 'expense' && (
@@ -129,7 +256,7 @@ export default function CategorySettings({ onClose }: Props) {
                     <span className="text-xs text-gray-500 shrink-0">支出分類:</span>
                     <select
                       value={node.expenseType ?? ''}
-                      onChange={e => setExpenseType(node.id, e.target.value)}
+                      onChange={e => handleMajorExpenseTypeChange(node.id, e.target.value)}
                       className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white flex-1"
                     >
                       <option value="">未設定</option>
@@ -145,7 +272,7 @@ export default function CategorySettings({ onClose }: Props) {
                     <span className="text-xs text-gray-500 shrink-0">予算区分:</span>
                     <select
                       value={node.budgetType ?? ''}
-                      onChange={e => setBudgetType(node.id, e.target.value)}
+                      onChange={e => handleMajorBudgetTypeChange(node.id, e.target.value)}
                       className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white flex-1"
                     >
                       <option value="">未設定</option>
@@ -154,10 +281,34 @@ export default function CategorySettings({ onClose }: Props) {
                     </select>
                   </div>
                 )}
-                {node.subcategories.map(sub => (
-                  <div key={sub} className="flex items-center justify-between py-1 border-b border-gray-100">
-                    <span className="text-sm text-gray-700">{sub}</span>
-                    <button onClick={() => deleteMinor(node.id, sub)} className="text-red-400 text-xs">削除</button>
+                {node.subcategories.map((sub, si) => (
+                  <div key={sub.name} className="flex items-center gap-2 py-1.5 border-b border-gray-100">
+                    <span className="text-sm text-gray-700 flex-1">{sub.name}</span>
+                    {tab === 'expense' && (
+                      <select
+                        value={sub.expenseType ?? ''}
+                        onChange={e => handleSubExpenseTypeChange(node.id, si, e.target.value)}
+                        className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 bg-white"
+                      >
+                        <option value="">－</option>
+                        <option value="毎月固定">毎月固定</option>
+                        <option value="毎月変動">毎月変動</option>
+                        <option value="不定期固定">不定期固定</option>
+                        <option value="不定期変動">不定期変動</option>
+                      </select>
+                    )}
+                    {tab === 'income' && (
+                      <select
+                        value={sub.budgetType ?? ''}
+                        onChange={e => handleSubBudgetTypeChange(node.id, si, e.target.value)}
+                        className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 bg-white"
+                      >
+                        <option value="">－</option>
+                        <option value="予算内">予算内</option>
+                        <option value="予算外">予算外</option>
+                      </select>
+                    )}
+                    <button onClick={() => deleteMinor(node.id, sub.name)} className="text-red-400 text-xs shrink-0">削除</button>
                   </div>
                 ))}
                 <div className="flex gap-2 pt-1">
@@ -192,6 +343,29 @@ export default function CategorySettings({ onClose }: Props) {
           <button onClick={addMajor} className="bg-indigo-600 text-white text-sm px-4 py-2 rounded-xl">追加</button>
         </div>
       </div>
+
+      {/* Retroactive apply confirmation dialog */}
+      {pendingChange && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-end justify-center">
+          <div className="bg-white rounded-t-2xl w-full p-4 space-y-3">
+            <h3 className="font-semibold text-gray-800 text-sm">既存の明細にも反映しますか？</h3>
+            <p className="text-xs text-gray-500">
+              「{config[tab].find(n => n.id === pendingChange.nodeId)?.name}
+              {pendingChange.subName ? ` ＞ ${pendingChange.subName}` : ''}」の
+              分類を「{pendingChange.value}」に変更しました。
+            </p>
+            <p className="text-xs text-gray-500">過去の明細データにも一括で反映しますか？</p>
+            <div className="flex gap-2">
+              <button onClick={() => setPendingChange(null)} className="flex-1 py-2.5 border border-gray-300 rounded-xl text-sm text-gray-700">
+                今後の明細のみ
+              </button>
+              <button onClick={confirmRetroactive} className="flex-1 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium">
+                既存にも反映する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { useApp } from '../contexts/AppContext';
 import { Transaction, TransactionType } from '../types';
 import MoneyForwardImport from '../components/MoneyForwardImport';
 import { saveCategoryRule } from '../lib/categoryRules';
-import { getMajorCategories, getMinorCategories, getTagForCategory } from '../lib/categoryConfig';
+import { getMajorCategories, getMinorCategories, getEffectiveTag } from '../lib/categoryConfig';
 import CategorySettings from '../components/CategorySettings';
 
 const MF_CATEGORY_COLORS: Record<string, string> = {
@@ -426,9 +426,9 @@ export default function ActualResults() {
                     setForm(f => ({ ...f, subcategory: newSubcat }));
                     setMinorCategory('');
                     // Auto-fill from category config
-                    const tags = getTagForCategory(form.type, newSubcat);
-                    if (tags.expenseType && !expenseType) setExpenseType(tags.expenseType as '毎月固定'|'毎月変動'|'不定期固定'|'不定期変動');
-                    if (tags.budgetType && !budgetType) setBudgetType(tags.budgetType as '予算内'|'予算外');
+                    const tags = getEffectiveTag(form.type, newSubcat);
+                    if (tags.expenseType) setExpenseType(tags.expenseType as '毎月固定'|'毎月変動'|'不定期固定'|'不定期変動');
+                    if (tags.budgetType) setBudgetType(tags.budgetType as '予算内'|'予算外');
                   }}
                   className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white"
                 >
@@ -443,7 +443,13 @@ export default function ActualResults() {
                   <label className="text-xs text-gray-500 mb-1 block">中分類</label>
                   <select
                     value={minorCategory}
-                    onChange={e => setMinorCategory(e.target.value)}
+                    onChange={e => {
+                      const newMinor = e.target.value;
+                      setMinorCategory(newMinor);
+                      const tags = getEffectiveTag(form.type, form.subcategory, newMinor);
+                      if (tags.expenseType) setExpenseType(tags.expenseType as '毎月固定'|'毎月変動'|'不定期固定'|'不定期変動');
+                      if (tags.budgetType) setBudgetType(tags.budgetType as '予算内'|'予算外');
+                    }}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white"
                   >
                     <option value="">選択してください</option>

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../contexts/AppContext';
-import { getTagForCategory } from '../lib/categoryConfig';
+import { getEffectiveTag } from '../lib/categoryConfig';
 
 function fmt(n: number): string {
   if (n >= 10000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + '万円';
@@ -63,7 +63,7 @@ export default function Home() {
           t.type === 'expense' && !t.excluded
         );
         const filtered = monthTx.filter(t => {
-          const effectiveType = t.expenseType || getTagForCategory('expense', t.subcategory).expenseType;
+          const effectiveType = t.expenseType || getEffectiveTag('expense', t.subcategory, t.minorCategory).expenseType;
           return effectiveType === et;
         });
         return filtered.reduce((s, t) => s + t.amount, 0);
@@ -81,14 +81,14 @@ export default function Home() {
     const budgetNai = last12Months.map(({ year, month }) =>
       transactions.filter(t => {
         if (t.year !== year || t.month !== month || t.type !== 'income') return false;
-        const effective = t.budgetType || getTagForCategory('income', t.subcategory).budgetType;
+        const effective = t.budgetType || getEffectiveTag('income', t.subcategory, t.minorCategory).budgetType;
         return effective === '予算内';
       }).reduce((s, t) => s + t.amount, 0)
     ).filter(a => a > 0);
     const budgetGai = last12Months.map(({ year, month }) =>
       transactions.filter(t => {
         if (t.year !== year || t.month !== month || t.type !== 'income') return false;
-        const effective = t.budgetType || getTagForCategory('income', t.subcategory).budgetType;
+        const effective = t.budgetType || getEffectiveTag('income', t.subcategory, t.minorCategory).budgetType;
         return effective === '予算外';
       }).reduce((s, t) => s + t.amount, 0)
     ).filter(a => a > 0);
