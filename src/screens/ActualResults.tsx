@@ -237,22 +237,28 @@ export default function ActualResults() {
                           <div className="w-full flex items-center px-2 py-2 gap-1.5 border-b border-gray-100">
                             <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
                             <span className="text-xs font-semibold text-gray-800 flex-1 truncate text-left">{item.name}</span>
-                            <span className="text-[10px] text-gray-400 shrink-0">{pct}%</span>
-                            <span className="text-xs text-gray-600 font-medium shrink-0">{fmtShort(item.value)}</span>
+                            <div className="text-right shrink-0">
+                              <p className="text-xs font-medium text-gray-700">{fmt(item.value)}</p>
+                              <p className="text-[10px] text-gray-400">{pct}%</p>
+                            </div>
                           </div>
                           {/* 中分類・明細（常時表示） */}
                           <div>
                             {minorGroups.map(minor => {
                               const minorKey = `income-${item.name}-${minor.name}`;
                               const minorExpanded = expandedGroups.has(minorKey);
+                              const minorPct = item.value > 0 ? Math.round(minor.total / item.value * 100) : 0;
                               const minorTx = majorTx.filter(t => (t.minorCategory || t.itemName) === minor.name).sort((a, b) => (b.day || 0) - (a.day || 0));
                               return (
                                 <div key={minor.name} className="border-b border-gray-50 last:border-0">
                                   {/* 中分類行 */}
-                                  <button onClick={() => toggleGroup(minorKey)} className="w-full flex items-center pl-5 pr-2 py-1.5 gap-1.5 bg-gray-50/60 hover:bg-gray-100 transition-colors">
-                                    <span className="text-[9px] text-gray-400 shrink-0">●</span>
+                                  <button onClick={() => toggleGroup(minorKey)} className="w-full flex items-center pl-5 pr-2 py-1.5 gap-1.5 transition-colors" style={{ backgroundColor: color + '18' }}>
+                                    <span className="text-[9px] shrink-0" style={{ color }}>●</span>
                                     <span className="text-xs text-gray-600 flex-1 truncate text-left">{minor.name}</span>
-                                    <span className="text-xs text-gray-500 shrink-0">{fmtShort(minor.total)}</span>
+                                    <div className="text-right shrink-0">
+                                      <p className="text-xs text-gray-600">{fmt(minor.total)}</p>
+                                      <p className="text-[10px] text-gray-400">{minorPct}%</p>
+                                    </div>
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-3 h-3 text-gray-300 shrink-0 transition-transform ${minorExpanded ? 'rotate-180' : ''}`}>
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                                     </svg>
@@ -334,22 +340,28 @@ export default function ActualResults() {
                           <div className="w-full flex items-center px-2 py-2 gap-1.5 border-b border-gray-100">
                             <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
                             <span className="text-xs font-semibold text-gray-800 flex-1 truncate text-left">{item.name}</span>
-                            <span className="text-[10px] text-gray-400 shrink-0">{pct}%</span>
-                            <span className="text-xs text-gray-600 font-medium shrink-0">{fmtShort(item.value)}</span>
+                            <div className="text-right shrink-0">
+                              <p className="text-xs font-medium text-gray-700">{fmt(item.value)}</p>
+                              <p className="text-[10px] text-gray-400">{pct}%</p>
+                            </div>
                           </div>
                           {/* 中分類・明細（常時表示） */}
                           <div>
                             {minorGroups.map(minor => {
                               const minorKey = `expense-${item.name}-${minor.name}`;
                               const minorExpanded = expandedGroups.has(minorKey);
+                              const minorPct = item.value > 0 ? Math.round(minor.total / item.value * 100) : 0;
                               const minorTx = majorTx.filter(t => (t.minorCategory || t.itemName) === minor.name).sort((a, b) => (b.day || 0) - (a.day || 0));
                               return (
                                 <div key={minor.name} className="border-b border-gray-50 last:border-0">
                                   {/* 中分類行 */}
-                                  <button onClick={() => toggleGroup(minorKey)} className="w-full flex items-center pl-5 pr-2 py-1.5 gap-1.5 bg-gray-50/60 hover:bg-gray-100 transition-colors">
-                                    <span className="text-[9px] text-gray-400 shrink-0">●</span>
+                                  <button onClick={() => toggleGroup(minorKey)} className="w-full flex items-center pl-5 pr-2 py-1.5 gap-1.5 transition-colors" style={{ backgroundColor: color + '18' }}>
+                                    <span className="text-[9px] shrink-0" style={{ color }}>●</span>
                                     <span className="text-xs text-gray-600 flex-1 truncate text-left">{minor.name}</span>
-                                    <span className="text-xs text-gray-500 shrink-0">{fmtShort(minor.total)}</span>
+                                    <div className="text-right shrink-0">
+                                      <p className="text-xs text-gray-600">{fmt(minor.total)}</p>
+                                      <p className="text-[10px] text-gray-400">{minorPct}%</p>
+                                    </div>
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-3 h-3 text-gray-300 shrink-0 transition-transform ${minorExpanded ? 'rotate-180' : ''}`}>
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                                     </svg>
