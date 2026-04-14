@@ -15,6 +15,24 @@ export interface AutoClassifyResult {
 
 const RULES_KEY = 'lifeplan_category_rules';
 
+// 汎用名称（学習に適さない名前）のセット
+const GENERIC_NAMES = new Set([
+  '内容なし', '不明', '不明な取引', 'その他', '各種', '手数料',
+  '振り込み', '振込', '入金', '出金', '振替', 'atm', 'atm入金', 'atm出金',
+  '利息', '利子', '残高', '繰越', 'チャージ', '引き落とし', '引落',
+]);
+
+/**
+ * 汎用的な名称かどうか判定（学習ルールの保存をスキップするために使用）
+ */
+export function isGenericStoreName(name: string): boolean {
+  const lower = name.trim().toLowerCase();
+  if (lower.length < 2) return true;
+  if (GENERIC_NAMES.has(lower)) return true;
+  if (/^\d+$/.test(lower)) return true;  // 数字のみ
+  return false;
+}
+
 // 管理番号・日付・記号を除去して店名の核となる部分を抽出
 export function normalizeStoreName(name: string): string {
   return name

@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import { useApp } from '../contexts/AppContext';
 import { Transaction, TransactionType } from '../types';
 import MoneyForwardImport from '../components/MoneyForwardImport';
-import { saveCategoryRule } from '../lib/categoryRules';
+import { saveCategoryRule, isGenericStoreName } from '../lib/categoryRules';
 import { getMajorCategories, getMinorCategories, getEffectiveTag } from '../lib/categoryConfig';
 import CategorySettings from '../components/CategorySettings';
 import CategorySection, { getCategoryColor } from '../components/actual/CategorySection';
@@ -52,6 +52,7 @@ export default function ActualResults() {
   const totalIncome = useMemo(() => monthlyTx.filter(t => t.type === 'income' && !t.excluded).reduce((s, t) => s + t.amount, 0), [monthlyTx]);
   const totalExpense = useMemo(() => monthlyTx.filter(t => t.type === 'expense' && !t.excluded).reduce((s, t) => s + t.amount, 0), [monthlyTx]);
   const investmentSavingsTotal = totalIncome - totalExpense;
+  // 支出率 = 支出 ÷ 収入（投資・貯蓄は含まない）
   const expenseRate = totalIncome > 0 ? Math.round(totalExpense / totalIncome * 100) : 0;
 
   const investSavPieData = useMemo(() => {
@@ -111,7 +112,10 @@ export default function ActualResults() {
     update(tx);
     if (applyToAll) {
       transactions.filter(t => t.itemName === tx.itemName && t.id !== tx.id).forEach(update);
-      saveCategoryRule(tx.itemName, { type, category: subcategory, subcategory });
+      // 汎用名称は学習ルールに保存しない（「内容なし」「不明」などは店名として適さない）
+      if (!isGenericStoreName(tx.itemName)) {
+        saveCategoryRule(tx.itemName, { type, category: subcategory, subcategory });
+      }
     }
     setReclassify(null);
   }
@@ -209,9 +213,10 @@ export default function ActualResults() {
                         </div>
                       );
                     })}
-                    <div className="flex items-center pl-1 pr-2 py-2 gap-1.5 bg-green-50">
-                      <span className="text-xs font-semibold text-green-700 flex-1">貯蓄</span>
-                      <span className="text-xs font-semibold text-green-700 tabular-nums w-16 text-right shrink-0">{fmt(investmentSavingsTotal)}</span>
+                    <div className="flex items-center pl-1 pr-2 py-2 gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-green-500" />
+                      <span className="text-xs font-semibold text-gray-700 flex-1">貯蓄</span>
+                      <span className="text-xs font-semibold text-gray-700 tabular-nums w-16 text-right shrink-0">{fmt(investmentSavingsTotal)}</span>
                     </div>
                   </div>
                 </>
@@ -436,13 +441,22 @@ export default function ActualResults() {
                   </select>
                 </div>
               )}
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input type="checkbox" checked={applyToAll} onChange={e => setApplyToAll(e.target.checked)} className="rounded text-indigo-600 w-4 h-4" />
-                <div>
-                  <p className="text-sm font-medium text-gray-700">「{reclassify.tx.itemName}」を今後も同じ分類に</p>
-                  <p className="text-xs text-gray-400">同じ店名の取引に一括適用し、次回取込時も自動分類します</p>
+              {isGenericStoreName(reclassify.tx.itemName) ? (
+                <div className="flex items-start gap-2 bg-amber-50 rounded-lg px-3 py-2.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-amber-500 shrink-0 mt-0.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                  </svg>
+                  <p className="text-xs text-amber-700">「{reclassify.tx.itemName}」は汎用的な名称のため、分類の学習は行いません</p>
                 </div>
-              </label>
+              ) : (
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" checked={applyToAll} onChange={e => setApplyToAll(e.target.checked)} className="rounded text-indigo-600 w-4 h-4" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700">「{reclassify.tx.itemName}」を今後も同じ分類に</p>
+                    <p className="text-xs text-gray-400">同じ店名の取引に一括適用し、次回取込時も自動分類します</p>
+                  </div>
+                </label>
+              )}
               <button onClick={handleReclassify} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-medium hover:bg-indigo-700">
                 変更を保存
               </button>
