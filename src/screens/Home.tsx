@@ -3,8 +3,7 @@ import { useApp } from '../contexts/AppContext';
 import { getEffectiveTag } from '../lib/categoryConfig';
 
 function fmt(n: number): string {
-  if (n >= 10000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + '万円';
-  return n.toLocaleString('ja-JP') + '円';
+  return n.toLocaleString('ja-JP');
 }
 
 const EXPENSE_TYPES = ['毎月固定', '毎月変動', '不定期固定', '不定期変動'] as const;

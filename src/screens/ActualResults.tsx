@@ -4,7 +4,8 @@ import { useApp } from '../contexts/AppContext';
 import { Transaction, TransactionType } from '../types';
 import MoneyForwardImport from '../components/MoneyForwardImport';
 import { saveCategoryRule } from '../lib/categoryRules';
-import { getMajorCategories, getMinorCategories, getEffectiveTag, getCategoryConfig, saveCategoryConfig } from '../lib/categoryConfig';
+import { getMajorCategories, getMinorCategories, getEffectiveTag } from '../lib/categoryConfig';
+import CategorySettings from '../components/CategorySettings';
 
 const MF_CATEGORY_COLORS: Record<string, string> = {
   '食費': '#E94B3C', '外食': '#E94B3C', '食料品': '#E94B3C',
@@ -50,13 +51,8 @@ export default function ActualResults() {
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
   const [showModal, setShowModal] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showCategorySettings, setShowCategorySettings] = useState(false);
   const [form, setForm] = useState<FormState>(defaultForm);
-  // 新しいカテゴリを追加フォーム
-  const [showAddCatForm, setShowAddCatForm] = useState(false);
-  const [newCatType, setNewCatType] = useState<TransactionType>('expense');
-  const [newMajorName, setNewMajorName] = useState('');
-  const [newMinorName, setNewMinorName] = useState('');
-  const [newExpenseType, setNewExpenseType] = useState<'毎月固定'|'毎月変動'|'不定期固定'|'不定期変動'|''>('');
   const [minorCategory, setMinorCategory] = useState('');
   const [expenseType, setExpenseType] = useState<'毎月固定'|'毎月変動'|'不定期固定'|'不定期変動'|''>('');
   const [budgetType, setBudgetType] = useState<'予算内'|'予算外'|''>('');
@@ -126,39 +122,9 @@ export default function ActualResults() {
     setShowModal(false); setForm(defaultForm); setMinorCategory(''); setExpenseType(''); setBudgetType(''); setMember(''); setEditingId(null);
   }
 
-  function handleAddCategory() {
-    if (!newMajorName.trim()) return;
-    const config = getCategoryConfig();
-    const typeList = config[newCatType];
-    const existing = typeList.find(n => n.name === newMajorName.trim());
-    if (existing) {
-      if (newMinorName.trim() && !existing.subcategories.find(s => s.name === newMinorName.trim())) {
-        existing.subcategories.push({ name: newMinorName.trim(), expenseType: newExpenseType || undefined });
-      }
-    } else {
-      typeList.push({
-        id: `custom-${Date.now()}`,
-        name: newMajorName.trim(),
-        subcategories: newMinorName.trim()
-          ? [{ name: newMinorName.trim(), expenseType: newExpenseType || undefined }]
-          : [],
-        expenseType: newExpenseType || undefined,
-      });
-    }
-    saveCategoryConfig(config);
-    if (reclassify) {
-      setReclassify(r => r ? { ...r, type: newCatType, subcategory: newMajorName.trim(), minorCategory: newMinorName.trim() } : r);
-    } else {
-      setForm(f => ({ ...f, type: newCatType, subcategory: newMajorName.trim() }));
-      setMinorCategory(newMinorName.trim());
-    }
-    setShowAddCatForm(false);
-    setNewMajorName(''); setNewMinorName(''); setNewExpenseType('');
-  }
-
   function openReclassify(tx: Transaction) {
     setReclassify({ tx, type: tx.type, subcategory: tx.subcategory, minorCategory: tx.minorCategory || '' });
-    setApplyToAll(false);
+    setApplyToAll(true);
   }
 
   function handleReclassify() {
@@ -500,31 +466,6 @@ export default function ActualResults() {
                     <option key={node.id} value={node.name}>{node.name}</option>
                   ))}
                 </select>
-                <button
-                  onClick={() => { setNewCatType(form.type); setShowAddCatForm(true); }}
-                  className="mt-1.5 text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                  新しいカテゴリを追加
-                </button>
-                {showAddCatForm && !reclassify && (
-                  <div className="mt-2 bg-indigo-50 border border-indigo-100 rounded-xl p-3 space-y-2">
-                    <p className="text-xs font-medium text-indigo-700">新しいカテゴリを追加</p>
-                    <input value={newMajorName} onChange={e => setNewMajorName(e.target.value)} placeholder="大分類名（必須）" className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs" />
-                    <input value={newMinorName} onChange={e => setNewMinorName(e.target.value)} placeholder="中分類名（任意）" className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs" />
-                    <select value={newExpenseType} onChange={e => setNewExpenseType(e.target.value as '毎月固定'|'毎月変動'|'不定期固定'|'不定期変動'|'')} className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white">
-                      <option value="">支出分類（任意）</option>
-                      <option value="毎月固定">毎月固定</option>
-                      <option value="毎月変動">毎月変動</option>
-                      <option value="不定期固定">不定期固定</option>
-                      <option value="不定期変動">不定期変動</option>
-                    </select>
-                    <div className="flex gap-2">
-                      <button onClick={handleAddCategory} className="flex-1 bg-indigo-600 text-white text-xs py-1.5 rounded-lg">追加して選択</button>
-                      <button onClick={() => setShowAddCatForm(false)} className="flex-1 border border-gray-300 text-xs py-1.5 rounded-lg text-gray-600">キャンセル</button>
-                    </div>
-                  </div>
-                )}
               </div>
               {getMinorCategories(form.type, form.subcategory).length > 0 && (
                 <div>
@@ -650,31 +591,6 @@ export default function ActualResults() {
                     <option key={node.id} value={node.name}>{node.name}</option>
                   ))}
                 </select>
-                <button
-                  onClick={() => { setNewCatType(reclassify.type); setShowAddCatForm(true); }}
-                  className="mt-1.5 text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-                  新しいカテゴリを追加
-                </button>
-                {showAddCatForm && (
-                  <div className="mt-2 bg-indigo-50 border border-indigo-100 rounded-xl p-3 space-y-2">
-                    <p className="text-xs font-medium text-indigo-700">新しいカテゴリを追加</p>
-                    <input value={newMajorName} onChange={e => setNewMajorName(e.target.value)} placeholder="大分類名（必須）" className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs" />
-                    <input value={newMinorName} onChange={e => setNewMinorName(e.target.value)} placeholder="中分類名（任意）" className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs" />
-                    <select value={newExpenseType} onChange={e => setNewExpenseType(e.target.value as '毎月固定'|'毎月変動'|'不定期固定'|'不定期変動'|'')} className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white">
-                      <option value="">支出分類（任意）</option>
-                      <option value="毎月固定">毎月固定</option>
-                      <option value="毎月変動">毎月変動</option>
-                      <option value="不定期固定">不定期固定</option>
-                      <option value="不定期変動">不定期変動</option>
-                    </select>
-                    <div className="flex gap-2">
-                      <button onClick={handleAddCategory} className="flex-1 bg-indigo-600 text-white text-xs py-1.5 rounded-lg">追加して選択</button>
-                      <button onClick={() => setShowAddCatForm(false)} className="flex-1 border border-gray-300 text-xs py-1.5 rounded-lg text-gray-600">キャンセル</button>
-                    </div>
-                  </div>
-                )}
               </div>
               {getMinorCategories(reclassify.type, reclassify.subcategory).length > 0 && (
                 <div>
@@ -701,12 +617,18 @@ export default function ActualResults() {
               <button onClick={handleReclassify} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-medium hover:bg-indigo-700">
                 変更を保存
               </button>
+              <div className="text-center pt-1">
+                <button onClick={() => { setReclassify(null); setShowCategorySettings(true); }} className="text-xs text-gray-400 hover:text-indigo-500">
+                  カテゴリを追加・編集はこちら →
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {showImport && <MoneyForwardImport onClose={() => setShowImport(false)} />}
+      {showCategorySettings && <CategorySettings onClose={() => setShowCategorySettings(false)} />}
     </div>
   );
 }

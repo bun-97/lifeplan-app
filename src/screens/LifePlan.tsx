@@ -9,7 +9,6 @@ const BIRTH_YEARS = Array.from({ length: 81 }, (_, i) => 1950 + i);
 
 function formatAmount(n: number): string {
   if (n === 0) return '-';
-  if (Math.abs(n) >= 10000) return (n / 10000).toFixed(0) + '万';
   return n.toLocaleString('ja-JP');
 }
 

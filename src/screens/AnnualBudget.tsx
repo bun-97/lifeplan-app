@@ -11,14 +11,11 @@ const CHART_COLORS = [
 
 function formatAmount(n: number): string {
   if (n === 0) return '0';
-  if (Math.abs(n) >= 10000) {
-    return (n / 10000).toFixed(1) + '万';
-  }
   return n.toLocaleString('ja-JP');
 }
 
 function formatFull(n: number): string {
-  return n.toLocaleString('ja-JP') + '円';
+  return n.toLocaleString('ja-JP');
 }
 
 const typeLabel: Record<TransactionType, string> = {

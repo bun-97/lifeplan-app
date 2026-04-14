@@ -1,26 +1,19 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { Budget, TransactionType } from '../types';
-
-const EXPENSE_CATEGORIES = ['毎月固定費', '毎月変動費', '不定期固定費', '不定期変動費'];
-const INCOME_CATEGORIES = ['予算内', '予算外'];
-const INVESTMENT_CATEGORIES = ['積立投資', '定期預金', 'その他'];
+import { getMajorCategories, getMinorCategories } from '../lib/categoryConfig';
 
 const ALL_YEARS = Array.from({ length: 36 }, (_, i) => 2025 + i);
 const VISIBLE_COUNT = 10;
 
 function formatAmount(n: number): string {
   if (n === 0) return '-';
-  if (Math.abs(n) >= 10000) {
-    return (n / 10000).toFixed(0) + '万円';
-  }
-  return n.toLocaleString('ja-JP') + '円';
+  return n.toLocaleString('ja-JP');
 }
 
-function getCategoriesForType(type: TransactionType): string[] {
-  if (type === 'income') return INCOME_CATEGORIES;
-  if (type === 'expense') return EXPENSE_CATEGORIES;
-  return INVESTMENT_CATEGORIES;
+function getDefaultCategory(type: TransactionType): string {
+  const cats = getMajorCategories(type);
+  return cats.length > 0 ? cats[0].name : '';
 }
 
 interface FormState {
@@ -34,7 +27,7 @@ interface FormState {
 
 const defaultForm: FormState = {
   type: 'expense',
-  category: '毎月固定費',
+  category: '',
   subcategory: '',
   amount: '',
   startYear: 2025,
@@ -62,12 +55,11 @@ export default function BudgetPlan() {
   const visibleYears = ALL_YEARS.slice(startIdx, startIdx + VISIBLE_COUNT);
 
   function handleTypeChange(type: TransactionType) {
-    const cats = getCategoriesForType(type);
-    setForm(f => ({ ...f, type, category: cats[0] }));
+    setForm(f => ({ ...f, type, category: getDefaultCategory(type), subcategory: '' }));
   }
 
   function handleSubmit() {
-    if (!form.subcategory.trim() || !form.amount) return;
+    if (!form.category.trim() || !form.amount) return;
     const amount = Number(form.amount);
     if (isNaN(amount) || amount <= 0) return;
     if (!currentProfile) return;
@@ -75,7 +67,7 @@ export default function BudgetPlan() {
       profileId: currentProfile.id,
       type: form.type,
       category: form.category,
-      subcategory: form.subcategory,
+      subcategory: form.subcategory || form.category,
       amount,
       startYear: form.startYear,
       endYear: form.endYear
@@ -194,7 +186,7 @@ export default function BudgetPlan() {
                           <div className="flex items-center justify-between gap-2">
                             <div>
                               <p className="font-medium text-gray-800">{budget.subcategory}</p>
-                              <p className="text-gray-400">{budget.category} · 月{budget.amount.toLocaleString()}円</p>
+                              <p className="text-gray-400">{budget.category} · 月{budget.amount.toLocaleString()}</p>
                               <p className="text-gray-400">{budget.startYear}〜{budget.endYear}年</p>
                             </div>
                             <button
@@ -299,31 +291,47 @@ export default function BudgetPlan() {
                 </div>
               </div>
 
-              {/* Category */}
+              {/* 大分類 */}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">カテゴリ</label>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">大分類</label>
                 <select
                   value={form.category}
-                  onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+                  onChange={e => setForm(f => ({ ...f, category: e.target.value, subcategory: '' }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 >
-                  {getCategoriesForType(form.type).map(c => (
-                    <option key={c} value={c}>{c}</option>
+                  <option value="">選択してください</option>
+                  {getMajorCategories(form.type).map(node => (
+                    <option key={node.id} value={node.name}>{node.name}</option>
                   ))}
                 </select>
               </div>
 
-              {/* Subcategory */}
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">サブカテゴリ名</label>
-                <input
-                  type="text"
-                  value={form.subcategory}
-                  onChange={e => setForm(f => ({ ...f, subcategory: e.target.value }))}
-                  placeholder="食費、家賃、給与など"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
-              </div>
+              {/* 中分類 */}
+              {form.category && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5">中分類（任意）</label>
+                  {getMinorCategories(form.type, form.category).length > 0 ? (
+                    <select
+                      value={form.subcategory}
+                      onChange={e => setForm(f => ({ ...f, subcategory: e.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="">なし</option>
+                      {getMinorCategories(form.type, form.category).map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={form.subcategory}
+                      onChange={e => setForm(f => ({ ...f, subcategory: e.target.value }))}
+                      placeholder="自由入力（任意）"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  )}
+                </div>
+              )}
 
               {/* Monthly amount */}
               <div>
@@ -337,7 +345,7 @@ export default function BudgetPlan() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
                 {form.amount && Number(form.amount) > 0 && (
-                  <p className="text-xs text-gray-400 mt-1">年間: {(Number(form.amount) * 12).toLocaleString()}円</p>
+                  <p className="text-xs text-gray-400 mt-1">年間: {(Number(form.amount) * 12).toLocaleString()}</p>
                 )}
               </div>
 
