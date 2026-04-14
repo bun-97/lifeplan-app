@@ -2,14 +2,10 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { Budget, TransactionType } from '../types';
 import { getMajorCategories, getMinorCategories } from '../lib/categoryConfig';
+import { fmtOrDash as formatAmount } from '../lib/format';
 
 const ALL_YEARS = Array.from({ length: 36 }, (_, i) => 2025 + i);
 const VISIBLE_COUNT = 10;
-
-function formatAmount(n: number): string {
-  if (n === 0) return '-';
-  return n.toLocaleString('ja-JP');
-}
 
 function getDefaultCategory(type: TransactionType): string {
   const cats = getMajorCategories(type);

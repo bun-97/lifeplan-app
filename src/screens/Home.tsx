@@ -1,10 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { getEffectiveTag } from '../lib/categoryConfig';
-
-function fmt(n: number): string {
-  return n.toLocaleString('ja-JP');
-}
+import { fmt } from '../lib/format';
 
 const EXPENSE_TYPES = ['毎月固定', '毎月変動', '不定期固定', '不定期変動'] as const;
 

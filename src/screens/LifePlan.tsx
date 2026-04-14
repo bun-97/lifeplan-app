@@ -2,15 +2,11 @@ import { useState, useMemo } from 'react';
 import { useApp } from '../contexts/AppContext';
 import { FamilyMember, LifeEvent } from '../types';
 import { v4 as uuidv4 } from 'uuid';
+import { fmtOrDash as formatAmount } from '../lib/format';
 
 const PLAN_YEARS = Array.from({ length: 36 }, (_, i) => 2025 + i);
 const RELATIONS = ['本人', '配偶者', '子供', 'その他'];
 const BIRTH_YEARS = Array.from({ length: 81 }, (_, i) => 1950 + i);
-
-function formatAmount(n: number): string {
-  if (n === 0) return '-';
-  return n.toLocaleString('ja-JP');
-}
 
 interface MemberForm {
   name: string;

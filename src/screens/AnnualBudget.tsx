@@ -2,21 +2,13 @@ import React, { useState, useMemo } from 'react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useApp } from '../contexts/AppContext';
 import { TransactionType } from '../types';
+import { fmt } from '../lib/format';
 
 const MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const CHART_COLORS = [
   '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316',
   '#eab308', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6'
 ];
-
-function formatAmount(n: number): string {
-  if (n === 0) return '0';
-  return n.toLocaleString('ja-JP');
-}
-
-function formatFull(n: number): string {
-  return n.toLocaleString('ja-JP');
-}
 
 const typeLabel: Record<TransactionType, string> = {
   income: '収入',
@@ -170,9 +162,9 @@ export default function AnnualBudget() {
           <div key={type} className="bg-white rounded-xl p-3 shadow-sm border border-gray-100">
             <p className="text-xs text-gray-500 mb-1">{typeLabel[type]}</p>
             <div className="space-y-0.5">
-              <p className={`text-sm font-bold ${typeTextColor[type]}`}>{formatAmount(annualBudget[type])}</p>
+              <p className={`text-sm font-bold ${typeTextColor[type]}`}>{fmt(annualBudget[type])}</p>
               <p className="text-xs text-gray-400">予算</p>
-              <p className={`text-sm font-semibold ${typeTextColor[type]} opacity-70`}>{formatAmount(annualActual[type])}</p>
+              <p className={`text-sm font-semibold ${typeTextColor[type]} opacity-70`}>{fmt(annualActual[type])}</p>
               <p className="text-xs text-gray-400">実績</p>
             </div>
           </div>
@@ -187,7 +179,7 @@ export default function AnnualBudget() {
             {(() => {
               const net = annualBudget.income - annualBudget.expense - annualBudget.investment;
               return <p className={`text-base font-bold ${net >= 0 ? 'text-gray-800' : 'text-red-500'}`}>
-                {net >= 0 ? '+' : ''}{formatFull(net)}
+                {net >= 0 ? '+' : ''}{fmt(net)}
               </p>;
             })()}
           </div>
@@ -196,7 +188,7 @@ export default function AnnualBudget() {
             {(() => {
               const net = annualActual.income - annualActual.expense - annualActual.investment;
               return <p className={`text-base font-bold ${net >= 0 ? 'text-gray-800' : 'text-red-500'}`}>
-                {net >= 0 ? '+' : ''}{formatFull(net)}
+                {net >= 0 ? '+' : ''}{fmt(net)}
               </p>;
             })()}
           </div>
@@ -238,11 +230,11 @@ export default function AnnualBudget() {
                           </td>
                           {MONTHS.map(m => (
                             <td key={m} className="px-1.5 py-1.5 text-center text-gray-600">
-                              {formatAmount(budgetMonthly)}
+                              {fmt(budgetMonthly)}
                             </td>
                           ))}
                           <td className="px-2 py-1.5 text-center font-semibold text-gray-700">
-                            {formatAmount(annualBudgetAmt)}
+                            {fmt(annualBudgetAmt)}
                           </td>
                         </tr>
                         {/* Actual row */}
@@ -257,7 +249,7 @@ export default function AnnualBudget() {
                             const isOver = actual > budgetMonthly && budgetMonthly > 0;
                             return (
                               <td key={m} className={`px-1.5 py-1.5 text-center font-medium ${actual > 0 ? (isOver ? 'text-red-500' : 'text-blue-600') : 'text-gray-300'}`}>
-                                {actual > 0 ? formatAmount(actual) : '-'}
+                                {actual > 0 ? fmt(actual) : '-'}
                               </td>
                             );
                           })}
@@ -266,7 +258,7 @@ export default function AnnualBudget() {
                               const total = MONTHS.reduce((s, m) => s + transactions
                                 .filter(t => t.year === selectedYear && t.month === m && t.type === type && t.subcategory === budget.subcategory)
                                 .reduce((ss, t) => ss + t.amount, 0), 0);
-                              return total > 0 ? formatAmount(total) : '-';
+                              return total > 0 ? fmt(total) : '-';
                             })()}
                           </td>
                         </tr>
@@ -283,7 +275,7 @@ export default function AnnualBudget() {
                             if (budgetMonthly === 0) return <td key={m} className="px-1.5 py-1 text-center text-gray-300">-</td>;
                             return (
                               <td key={m} className={`px-1.5 py-1 text-center text-[10px] ${diff >= 0 ? 'text-blue-500' : 'text-red-400'}`}>
-                                {diff >= 0 ? '+' : ''}{formatAmount(diff)}
+                                {diff >= 0 ? '+' : ''}{fmt(diff)}
                               </td>
                             );
                           })}
@@ -298,22 +290,22 @@ export default function AnnualBudget() {
                     <td className="px-3 py-2 sticky left-0 bg-gray-50 z-10 text-gray-700">合計（予算）</td>
                     {MONTHS.map(m => (
                       <td key={m} className={`px-1.5 py-2 text-center ${typeTextColor[type]}`}>
-                        {formatAmount(budgetByTypeMonth[type][m] || 0)}
+                        {fmt(budgetByTypeMonth[type][m] || 0)}
                       </td>
                     ))}
                     <td className={`px-2 py-2 text-center ${typeTextColor[type]}`}>
-                      {formatAmount(annualBudget[type])}
+                      {fmt(annualBudget[type])}
                     </td>
                   </tr>
                   <tr className="bg-gray-50">
                     <td className="px-3 py-1.5 sticky left-0 bg-gray-50 z-10 text-gray-500 text-[11px]">合計（実績）</td>
                     {MONTHS.map(m => (
                       <td key={m} className={`px-1.5 py-1.5 text-center text-[11px] ${typeTextColor[type]} opacity-70`}>
-                        {actualByTypeMonth[type][m] > 0 ? formatAmount(actualByTypeMonth[type][m]) : '-'}
+                        {actualByTypeMonth[type][m] > 0 ? fmt(actualByTypeMonth[type][m]) : '-'}
                       </td>
                     ))}
                     <td className={`px-2 py-1.5 text-center text-[11px] ${typeTextColor[type]} opacity-70`}>
-                      {annualActual[type] > 0 ? formatAmount(annualActual[type]) : '-'}
+                      {annualActual[type] > 0 ? fmt(annualActual[type]) : '-'}
                     </td>
                   </tr>
                 </tbody>
@@ -350,7 +342,7 @@ export default function AnnualBudget() {
                   <Cell key={index} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip formatter={(value: number) => formatFull(value)} />
+              <Tooltip formatter={(value: number) => fmt(value)} />
               <Legend />
             </PieChart>
           </ResponsiveContainer>
