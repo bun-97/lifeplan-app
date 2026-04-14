@@ -286,6 +286,7 @@ export default function MoneyForwardImport({ onClose }: Props) {
         amount: row.amount,
         note: 'MF取込',
         excluded: isAutoExcluded ? true : undefined,
+        source: 'mf',
       });
       imported++;
     }

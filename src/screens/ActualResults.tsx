@@ -53,7 +53,6 @@ export default function ActualResults() {
   const totalExpense = useMemo(() => monthlyTx.filter(t => t.type === 'expense' && !t.excluded).reduce((s, t) => s + t.amount, 0), [monthlyTx]);
   const investmentSavingsTotal = totalIncome - totalExpense;
   const expenseRate = totalIncome > 0 ? Math.round(totalExpense / totalIncome * 100) : 0;
-  const savingsRate = totalIncome > 0 ? Math.max(0, Math.round(investmentSavingsTotal / totalIncome * 100)) : 0;
 
   const investSavPieData = useMemo(() => {
     const map: Record<string, number> = {};
@@ -142,20 +141,12 @@ export default function ActualResults() {
           </button>
         </div>
 
-        {/* 支出率 / 貯蓄率 */}
-        <div className="flex justify-center gap-8 mb-4">
+        {/* 支出率 */}
+        <div className="flex justify-center mb-4">
           <div className="text-center">
             <p className="text-xs text-gray-400 mb-1">支出率</p>
             <div className={`relative inline-block ${expenseRate >= 80 ? 'text-red-500' : 'text-gray-800'}`}>
               <span className="text-4xl font-bold">{expenseRate}</span>
-              <span className="text-lg font-semibold absolute -right-5 bottom-1">%</span>
-            </div>
-          </div>
-          <div className="w-px bg-gray-100" />
-          <div className="text-center">
-            <p className="text-xs text-gray-400 mb-1">貯蓄率</p>
-            <div className={`relative inline-block ${savingsRate >= 20 ? 'text-green-500' : 'text-gray-800'}`}>
-              <span className="text-4xl font-bold">{savingsRate}</span>
               <span className="text-lg font-semibold absolute -right-5 bottom-1">%</span>
             </div>
           </div>
@@ -219,7 +210,7 @@ export default function ActualResults() {
                       );
                     })}
                     <div className="flex items-center pl-1 pr-2 py-2 gap-1.5 bg-green-50">
-                      <span className="text-xs font-semibold text-green-700 flex-1">合計</span>
+                      <span className="text-xs font-semibold text-green-700 flex-1">貯蓄</span>
                       <span className="text-xs font-semibold text-green-700 tabular-nums w-16 text-right shrink-0">{fmt(investmentSavingsTotal)}</span>
                     </div>
                   </div>
@@ -387,20 +378,35 @@ export default function ActualResults() {
               </button>
             </div>
             <div className="p-4 space-y-4">
-              <div className="bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-600">
-                <span className="font-medium">{reclassify.tx.itemName}</span>
-                <span className="text-xs text-gray-400 ml-2">{fmt(reclassify.tx.amount)}</span>
+              <div className="bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-600 flex items-center gap-2">
+                <span className="font-medium flex-1">{reclassify.tx.itemName}</span>
+                <span className="text-xs text-gray-400">{fmt(reclassify.tx.amount)}</span>
+                {(reclassify.tx.source === 'mf' || reclassify.tx.note === 'MF取込') && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500 shrink-0">MF取込</span>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">種別</label>
-                <div className="flex gap-2">
-                  {(['income', 'expense', 'investment', 'savings'] as TransactionType[]).map(t => (
-                    <button key={t} onClick={() => setReclassify(r => r ? { ...r, type: t, subcategory: '' } : r)}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${reclassify.type === t ? (t === 'income' ? 'bg-blue-500 text-white border-blue-500' : t === 'expense' ? 'bg-red-500 text-white border-red-500' : t === 'savings' ? 'bg-green-600 text-white border-green-600' : 'bg-gray-600 text-white border-gray-600') : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
-                      {typeLabel[t]}
-                    </button>
-                  ))}
-                </div>
+                {(reclassify.tx.source === 'mf' || reclassify.tx.note === 'MF取込') ? (
+                  // MF取込はカテゴリ変更のみ可・種別変更ロック
+                  <div className="flex gap-2">
+                    {(['income', 'expense', 'investment', 'savings'] as TransactionType[]).map(t => (
+                      <div key={t}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium border text-center cursor-not-allowed opacity-60 ${reclassify.type === t ? (t === 'income' ? 'bg-blue-500 text-white border-blue-500' : t === 'expense' ? 'bg-red-500 text-white border-red-500' : t === 'savings' ? 'bg-green-600 text-white border-green-600' : 'bg-gray-600 text-white border-gray-600') : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
+                        {typeLabel[t]}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    {(['income', 'expense', 'investment', 'savings'] as TransactionType[]).map(t => (
+                      <button key={t} onClick={() => setReclassify(r => r ? { ...r, type: t, subcategory: '' } : r)}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${reclassify.type === t ? (t === 'income' ? 'bg-blue-500 text-white border-blue-500' : t === 'expense' ? 'bg-red-500 text-white border-red-500' : t === 'savings' ? 'bg-green-600 text-white border-green-600' : 'bg-gray-600 text-white border-gray-600') : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+                        {typeLabel[t]}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <label className="text-xs text-gray-500 mb-1 block">大分類</label>

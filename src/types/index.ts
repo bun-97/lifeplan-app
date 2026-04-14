@@ -20,6 +20,7 @@ export interface Transaction {
   budgetType?: '予算内' | '予算外';
   member?: string;
   excluded?: boolean;
+  source?: 'mf';  // MF取込の場合のみセット
 }
 
 export interface ImportHistory {

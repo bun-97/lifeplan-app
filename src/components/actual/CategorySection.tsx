@@ -98,9 +98,11 @@ export default function CategorySection({ type, monthlyTx, expandedGroups, toggl
           const color = getCategoryColor(item.name, i);
           const majorKey = `${type}-${item.name}`;
           const majorExpanded = expandedGroups.has(majorKey);
+          // 全明細（表示用・除外済み含む）
           const majorTx = monthlyTx.filter(t => t.type === type && (t.subcategory || t.itemName) === item.name);
+          // ② 中分類合計は除外済みを含めない
           const minorMap: Record<string, number> = {};
-          majorTx.forEach(t => { const k = t.minorCategory || t.itemName; minorMap[k] = (minorMap[k] || 0) + t.amount; });
+          majorTx.filter(t => !t.excluded).forEach(t => { const k = t.minorCategory || t.itemName; minorMap[k] = (minorMap[k] || 0) + t.amount; });
           const minorGroups = Object.entries(minorMap).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total);
 
           return (
@@ -118,16 +120,23 @@ export default function CategorySection({ type, monthlyTx, expandedGroups, toggl
                 {minorGroups.map(minor => {
                   const minorKey = `${type}-${item.name}-${minor.name}`;
                   const minorExpanded = expandedGroups.has(minorKey);
-                  const minorTx = majorTx.filter(t => (t.minorCategory || t.itemName) === minor.name).sort((a, b) => (b.day || 0) - (a.day || 0));
+                  // ⑤ 中分類に属する全明細（除外済み含む・日付降順）
+                  const minorTx = majorTx
+                    .filter(t => (t.minorCategory || t.itemName) === minor.name)
+                    .sort((a, b) => (b.day || 0) - (a.day || 0));
+                  const showTx = minorExpanded || majorExpanded;
                   return (
                     <div key={minor.name} className="border-b border-gray-50 last:border-0">
-                      <button onClick={() => toggleGroup(minorKey)} className="w-full flex items-center pl-5 pr-2 py-1.5 gap-1.5 bg-white hover:bg-gray-50 transition-colors">
+                      <button
+                        onClick={e => { e.stopPropagation(); toggleGroup(minorKey); }}
+                        className="w-full flex items-center pl-5 pr-2 py-1.5 gap-1.5 bg-white hover:bg-gray-50 transition-colors"
+                      >
                         <span className="text-[9px] shrink-0" style={{ color }}>●</span>
                         <span className="text-xs text-gray-600 flex-1 truncate text-left">{minor.name}</span>
                         <span className="text-xs text-gray-600 tabular-nums text-right w-20 shrink-0">{fmt(minor.total)}</span>
                         <ChevronIcon expanded={minorExpanded} />
                       </button>
-                      {(minorExpanded || majorExpanded) && (
+                      {showTx && (
                         <div className="bg-gray-100 divide-y divide-gray-200">
                           {minorTx.map(tx => (
                             <div key={tx.id} className={`flex items-center pl-7 pr-2 py-1.5 gap-1 ${tx.excluded ? 'opacity-40' : ''}`}>
@@ -149,13 +158,17 @@ export default function CategorySection({ type, monthlyTx, expandedGroups, toggl
                                 </div>
                               </div>
                               <button
-                                onClick={() => updateTransaction({ ...tx, excluded: !tx.excluded })}
-                                className={`p-0.5 shrink-0 ${tx.excluded ? 'text-orange-400' : 'text-gray-300 hover:text-orange-400'}`}
+                                onClick={e => { e.stopPropagation(); updateTransaction({ ...tx, excluded: !tx.excluded }); }}
+                                className={`p-1 shrink-0 ${tx.excluded ? 'text-orange-400' : 'text-gray-300 hover:text-orange-400'}`}
                                 title={tx.excluded ? '集計に含める' : '集計から除外'}
                               >
                                 <ExcludeIcon excluded={!!tx.excluded} />
                               </button>
-                              <button onClick={() => openReclassify(tx)} className="text-gray-300 hover:text-indigo-500 p-0.5 shrink-0" title="分類変更">
+                              <button
+                                onClick={e => { e.stopPropagation(); openReclassify(tx); }}
+                                className="text-gray-300 hover:text-indigo-500 p-1 shrink-0"
+                                title="分類変更"
+                              >
                                 <ReclassifyIcon />
                               </button>
                             </div>
