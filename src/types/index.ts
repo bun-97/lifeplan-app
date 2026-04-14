@@ -1,4 +1,4 @@
-export type TransactionType = 'income' | 'expense' | 'investment';
+export type TransactionType = 'income' | 'expense' | 'investment' | 'savings';
 export type ExpenseCategory = '毎月固定費' | '毎月変動費' | '不定期固定費' | '不定期変動費';
 export type IncomeCategory = '予算内' | '予算外';
 

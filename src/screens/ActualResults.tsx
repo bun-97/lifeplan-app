@@ -69,9 +69,10 @@ export default function ActualResults() {
 
   const totalIncome = useMemo(() => monthlyTx.filter(t => t.type === 'income' && !t.excluded).reduce((s, t) => s + t.amount, 0), [monthlyTx]);
   const totalExpense = useMemo(() => monthlyTx.filter(t => t.type === 'expense' && !t.excluded).reduce((s, t) => s + t.amount, 0), [monthlyTx]);
-  const totalInvestment = useMemo(() => monthlyTx.filter(t => t.type === 'investment' && !t.excluded).reduce((s, t) => s + t.amount, 0), [monthlyTx]);
-  const balance = totalIncome - totalExpense - totalInvestment;
+  // 投資・貯蓄合計 = 収入 - 支出（自動計算）
+  const investmentSavingsTotal = totalIncome - totalExpense;
   const expenseRate = totalIncome > 0 ? Math.round(totalExpense / totalIncome * 100) : 0;
+  const savingsRate = totalIncome > 0 ? Math.max(0, Math.round(investmentSavingsTotal / totalIncome * 100)) : 0;
 
   // Pie data
   const expensePieData = useMemo(() => {
@@ -86,8 +87,17 @@ export default function ActualResults() {
     return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [monthlyTx]);
 
+  // 投資・貯蓄の明細（円グラフ用）
+  const investSavPieData = useMemo(() => {
+    const map: Record<string, number> = {};
+    monthlyTx.filter(t => (t.type === 'investment' || t.type === 'savings') && !t.excluded)
+      .forEach(t => { const k = t.subcategory || t.itemName; map[k] = (map[k] || 0) + t.amount; });
+    return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+  }, [monthlyTx]);
+
   const expensePieTotal = expensePieData.reduce((s, d) => s + d.value, 0);
   const incomePieTotal = incomePieData.reduce((s, d) => s + d.value, 0);
+  const investSavPieTotal = investSavPieData.reduce((s, d) => s + d.value, 0);
 
   function toggleGroup(key: string) {
     setExpandedGroups(prev => {
@@ -139,7 +149,7 @@ export default function ActualResults() {
     setReclassify(null);
   }
 
-  const typeLabel: Record<TransactionType, string> = { income: '収入', expense: '支出', investment: '投資・貯蓄' };
+  const typeLabel: Record<TransactionType, string> = { income: '収入', expense: '支出', investment: '投資', savings: '貯蓄' };
 
   if (!currentProfile) return <div className="flex items-center justify-center h-64"><p className="text-gray-500">プロファイルを作成してください</p></div>;
 
@@ -165,13 +175,21 @@ export default function ActualResults() {
           </button>
         </div>
 
-        {/* Expense rate — large main number, % as right adornment */}
-        <div className="text-center mb-4">
-          <p className="text-xs text-gray-400 mb-1">支出率</p>
-          <div className="flex justify-center">
+        {/* 支出率 / 貯蓄率 */}
+        <div className="flex justify-center gap-8 mb-4">
+          <div className="text-center">
+            <p className="text-xs text-gray-400 mb-1">支出率</p>
             <div className={`relative inline-block ${expenseRate >= 80 ? 'text-red-500' : 'text-gray-800'}`}>
-              <span className="text-5xl font-bold">{expenseRate}</span>
-              <span className="text-xl font-semibold absolute -right-6 bottom-1.5">%</span>
+              <span className="text-4xl font-bold">{expenseRate}</span>
+              <span className="text-lg font-semibold absolute -right-5 bottom-1">%</span>
+            </div>
+          </div>
+          <div className="w-px bg-gray-100" />
+          <div className="text-center">
+            <p className="text-xs text-gray-400 mb-1">貯蓄率</p>
+            <div className={`relative inline-block ${savingsRate >= 20 ? 'text-green-500' : 'text-gray-800'}`}>
+              <span className="text-4xl font-bold">{savingsRate}</span>
+              <span className="text-lg font-semibold absolute -right-5 bottom-1">%</span>
             </div>
           </div>
         </div>
@@ -187,9 +205,9 @@ export default function ActualResults() {
             <p className="text-sm font-bold text-red-500 tabular-nums">{fmt(totalExpense)}</p>
           </div>
           <div className="text-center px-2">
-            <p className="text-xs text-gray-400 mb-0.5">収支</p>
-            <p className={`text-sm font-bold tabular-nums ${balance >= 0 ? 'text-gray-800' : 'text-red-500'}`}>
-              {balance >= 0 ? '+' : ''}{fmt(balance)}
+            <p className="text-xs text-gray-400 mb-0.5">投資・貯蓄</p>
+            <p className={`text-sm font-bold tabular-nums ${investmentSavingsTotal >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              {investmentSavingsTotal >= 0 ? '+' : ''}{fmt(investmentSavingsTotal)}
             </p>
           </div>
         </div>
@@ -197,17 +215,17 @@ export default function ActualResults() {
 
       <div className="p-4 space-y-4">
 
-        {/* ===== PIE CHART SECTION: 2-column ===== */}
+        {/* ===== PIE CHART SECTION: 3-column ===== */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="grid grid-cols-2 divide-x divide-gray-100">
+          <div className="grid grid-cols-3 divide-x divide-gray-100">
             {/* LEFT: Income */}
             <div className="flex flex-col">
               <p className="text-xs font-medium text-blue-600 text-center py-2 border-b border-gray-100">収入</p>
               {incomePieData.length > 0 ? (
                 <>
-                  <ResponsiveContainer width="100%" height={150}>
+                  <ResponsiveContainer width="100%" height={110}>
                     <PieChart>
-                      <Pie data={incomePieData} dataKey="value" cx="50%" cy="50%" innerRadius={35} outerRadius={58}>
+                      <Pie data={incomePieData} dataKey="value" cx="50%" cy="50%" innerRadius={22} outerRadius={38}>
                         {incomePieData.map((entry, i) => (
                           <Cell key={i} fill={getCategoryColor(entry.name, i)} />
                         ))}
@@ -304,14 +322,14 @@ export default function ActualResults() {
               )}
             </div>
 
-            {/* RIGHT: Expense */}
+            {/* CENTER: Expense */}
             <div className="flex flex-col">
               <p className="text-xs font-medium text-red-500 text-center py-2 border-b border-gray-100">支出</p>
               {expensePieData.length > 0 ? (
                 <>
-                  <ResponsiveContainer width="100%" height={150}>
+                  <ResponsiveContainer width="100%" height={110}>
                     <PieChart>
-                      <Pie data={expensePieData} dataKey="value" cx="50%" cy="50%" innerRadius={35} outerRadius={58}>
+                      <Pie data={expensePieData} dataKey="value" cx="50%" cy="50%" innerRadius={22} outerRadius={38}>
                         {expensePieData.map((entry, i) => (
                           <Cell key={i} fill={getCategoryColor(entry.name, i)} />
                         ))}
@@ -407,6 +425,50 @@ export default function ActualResults() {
                 </div>
               )}
             </div>
+
+            {/* RIGHT: Investment & Savings */}
+            <div className="flex flex-col">
+              <p className="text-xs font-medium text-green-600 text-center py-2 border-b border-gray-100">投資・貯蓄</p>
+              {investSavPieData.length > 0 ? (
+                <>
+                  <ResponsiveContainer width="100%" height={110}>
+                    <PieChart>
+                      <Pie data={investSavPieData} dataKey="value" cx="50%" cy="50%" innerRadius={22} outerRadius={38}>
+                        {investSavPieData.map((entry, i) => (
+                          <Cell key={i} fill={getCategoryColor(entry.name, i)} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(v: number) => fmt(v)} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="divide-y divide-gray-50">
+                    {investSavPieData.map((item, i) => {
+                      const pct = investSavPieTotal > 0 ? Math.round(item.value / investSavPieTotal * 100) : 0;
+                      const color = getCategoryColor(item.name, i);
+                      return (
+                        <div key={item.name} className="flex items-center pl-1 pr-2 py-2 gap-1.5 border-b border-gray-100">
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                          <span className="text-xs text-gray-700 flex-1 truncate">{item.name}</span>
+                          <div className="text-right shrink-0 w-16">
+                            <p className="text-xs font-medium text-gray-700 tabular-nums">{fmt(item.value)}</p>
+                            <p className="text-[10px] text-gray-400">{pct}%</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div className="flex items-center pl-1 pr-2 py-2 gap-1.5 bg-green-50">
+                      <span className="text-xs font-semibold text-green-700 flex-1">合計</span>
+                      <span className="text-xs font-semibold text-green-700 tabular-nums w-16 text-right shrink-0">{fmt(investmentSavingsTotal)}</span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8 text-gray-300 gap-1">
+                  <p className="text-xs">収入 − 支出</p>
+                  <p className="text-sm font-semibold text-green-600">{fmt(investmentSavingsTotal)}</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -438,9 +500,9 @@ export default function ActualResults() {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">種別</label>
                 <div className="flex gap-2">
-                  {(['income', 'expense', 'investment'] as TransactionType[]).map(t => (
+                  {(['income', 'expense', 'investment', 'savings'] as TransactionType[]).map(t => (
                     <button key={t} onClick={() => { setForm(f => ({ ...f, type: t, subcategory: '' })); setMinorCategory(''); }}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${form.type === t ? (t === 'income' ? 'bg-blue-500 text-white border-blue-500' : t === 'expense' ? 'bg-red-500 text-white border-red-500' : 'bg-gray-600 text-white border-gray-600') : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${form.type === t ? (t === 'income' ? 'bg-blue-500 text-white border-blue-500' : t === 'expense' ? 'bg-red-500 text-white border-red-500' : t === 'savings' ? 'bg-green-600 text-white border-green-600' : 'bg-gray-600 text-white border-gray-600') : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
                       {typeLabel[t]}
                     </button>
                   ))}
@@ -571,9 +633,9 @@ export default function ActualResults() {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">種別</label>
                 <div className="flex gap-2">
-                  {(['income', 'expense', 'investment'] as TransactionType[]).map(t => (
+                  {(['income', 'expense', 'investment', 'savings'] as TransactionType[]).map(t => (
                     <button key={t} onClick={() => setReclassify(r => r ? { ...r, type: t, subcategory: '' } : r)}
-                      className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${reclassify.type === t ? (t === 'income' ? 'bg-blue-500 text-white border-blue-500' : t === 'expense' ? 'bg-red-500 text-white border-red-500' : 'bg-gray-600 text-white border-gray-600') : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
+                      className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${reclassify.type === t ? (t === 'income' ? 'bg-blue-500 text-white border-blue-500' : t === 'expense' ? 'bg-red-500 text-white border-red-500' : t === 'savings' ? 'bg-green-600 text-white border-green-600' : 'bg-gray-600 text-white border-gray-600') : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
                       {typeLabel[t]}
                     </button>
                   ))}

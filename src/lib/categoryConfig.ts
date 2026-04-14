@@ -18,6 +18,7 @@ export interface CategoryConfig {
   income: CategoryNode[];
   expense: CategoryNode[];
   investment: CategoryNode[];
+  savings: CategoryNode[];
 }
 
 const STORAGE_KEY = 'lifeplan_category_config';
@@ -48,8 +49,13 @@ const DEFAULT_CONFIG: CategoryConfig = {
   ],
   investment: [
     { id: 'inv-1', name: '株式投資', subcategories: [] },
-    { id: 'inv-2', name: '自己投資', subcategories: [] },
-    { id: 'inv-3', name: '貯金', subcategories: [] },
+    { id: 'inv-2', name: 'NISA', subcategories: [{ name: 'つみたてNISA' }, { name: '成長投資枠' }] },
+    { id: 'inv-3', name: 'iDeCo', subcategories: [] },
+  ],
+  savings: [
+    { id: 'sav-1', name: '貯金', subcategories: [] },
+    { id: 'sav-2', name: '積立', subcategories: [{ name: '定期積立' }, { name: '財形貯蓄' }] },
+    { id: 'sav-3', name: '定期預金', subcategories: [] },
   ],
 };
 
@@ -65,6 +71,7 @@ function migrateConfig(raw: any): CategoryConfig {
     income: migrateNodes(raw.income),
     expense: migrateNodes(raw.expense),
     investment: migrateNodes(raw.investment),
+    savings: migrateNodes(raw.savings ?? DEFAULT_CONFIG.savings),
   };
 }
 

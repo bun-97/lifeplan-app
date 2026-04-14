@@ -311,16 +311,18 @@ export default function MoneyForwardImport({ onClose }: Props) {
     setTimeout(() => onClose(), 2500);
   }
 
-  const TYPE_LABEL: Record<TransactionType, string> = { income: '収入', expense: '支出', investment: '投資' };
+  const TYPE_LABEL: Record<TransactionType, string> = { income: '収入', expense: '支出', investment: '投資', savings: '貯蓄' };
   const TYPE_COLOR: Record<TransactionType, string> = {
     income: 'text-green-700 bg-green-50',
     expense: 'text-red-700 bg-red-50',
-    investment: 'text-blue-700 bg-blue-50'
+    investment: 'text-blue-700 bg-blue-50',
+    savings: 'text-teal-700 bg-teal-50'
   };
   const TYPE_AMOUNT_COLOR: Record<TransactionType, string> = {
     income: 'text-green-600',
     expense: 'text-red-600',
-    investment: 'text-blue-600'
+    investment: 'text-blue-600',
+    savings: 'text-teal-600'
   };
 
   const displayRows = showAll ? rows : rows.filter(r => !r.isTransfer && !r.isExcluded && !r.isDuplicate);

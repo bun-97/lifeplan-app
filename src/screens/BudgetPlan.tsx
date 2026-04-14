@@ -37,13 +37,15 @@ const defaultForm: FormState = {
 const typeLabel: Record<TransactionType, string> = {
   income: '収入',
   expense: '支出',
-  investment: '投資・貯蓄'
+  investment: '投資',
+  savings: '貯蓄'
 };
 
 const typeColor: Record<TransactionType, string> = {
   income: 'text-blue-600',
   expense: 'text-red-500',
-  investment: 'text-blue-500'
+  investment: 'text-blue-500',
+  savings: 'text-green-600'
 };
 
 export default function BudgetPlan() {
@@ -80,7 +82,7 @@ export default function BudgetPlan() {
   const yearTotals = useMemo(() => {
     const result: Record<number, Record<TransactionType, number>> = {};
     ALL_YEARS.forEach(year => {
-      result[year] = { income: 0, expense: 0, investment: 0 };
+      result[year] = { income: 0, expense: 0, investment: 0, savings: 0 };
       budgets.forEach(b => {
         if (year >= b.startYear && year <= b.endYear) {
           result[year][b.type] += b.amount * 12;
@@ -99,7 +101,7 @@ export default function BudgetPlan() {
   }
 
   const groupedBudgets: Record<string, Budget[]> = {};
-  (['income', 'expense', 'investment'] as TransactionType[]).forEach(type => {
+  (['income', 'expense', 'investment', 'savings'] as TransactionType[]).forEach(type => {
     const items = budgets.filter(b => b.type === type);
     if (items.length > 0) groupedBudgets[type] = items;
   });
@@ -170,7 +172,7 @@ export default function BudgetPlan() {
               </tr>
             </thead>
             <tbody>
-              {(['income', 'expense', 'investment'] as TransactionType[]).map(type => {
+              {(['income', 'expense', 'investment', 'savings'] as TransactionType[]).map(type => {
                 const items = budgets.filter(b => b.type === type);
                 if (items.length === 0) return null;
                 return (
@@ -219,7 +221,7 @@ export default function BudgetPlan() {
                 <td className="px-3 py-2.5 sticky left-0 bg-indigo-50 z-10 text-indigo-700">年間合計（収支）</td>
                 {visibleYears.map(y => {
                   const totals = yearTotals[y];
-                  const net = totals.income - totals.expense - totals.investment;
+                  const net = totals.income - totals.expense - totals.investment - totals.savings;
                   return (
                     <td key={y} className={`px-2 py-2.5 text-center ${net >= 0 ? 'text-gray-800' : 'text-red-500'}`}>
                       {net >= 0 ? '+' : ''}{formatAmount(net)}
@@ -273,7 +275,7 @@ export default function BudgetPlan() {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1.5">種別</label>
                 <div className="flex gap-2">
-                  {(['income', 'expense', 'investment'] as TransactionType[]).map(t => (
+                  {(['income', 'expense', 'investment', 'savings'] as TransactionType[]).map(t => (
                     <button
                       key={t}
                       onClick={() => handleTypeChange(t)}

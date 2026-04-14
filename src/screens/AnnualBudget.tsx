@@ -21,13 +21,15 @@ function formatFull(n: number): string {
 const typeLabel: Record<TransactionType, string> = {
   income: '収入',
   expense: '支出',
-  investment: '投資・貯蓄'
+  investment: '投資',
+  savings: '貯蓄'
 };
 
 const typeTextColor: Record<TransactionType, string> = {
   income: 'text-blue-600',
   expense: 'text-red-500',
-  investment: 'text-blue-500'
+  investment: 'text-blue-500',
+  savings: 'text-green-600'
 };
 
 export default function AnnualBudget() {
@@ -52,12 +54,13 @@ export default function AnnualBudget() {
   // Actual per type per month
   const actualByTypeMonth = useMemo(() => {
     const result: Record<TransactionType, Record<number, number>> = {
-      income: {}, expense: {}, investment: {}
+      income: {}, expense: {}, investment: {}, savings: {}
     };
     MONTHS.forEach(m => {
       result.income[m] = 0;
       result.expense[m] = 0;
       result.investment[m] = 0;
+      result.savings[m] = 0;
     });
     transactions.filter(t => t.year === selectedYear).forEach(t => {
       result[t.type][t.month] = (result[t.type][t.month] || 0) + t.amount;
@@ -68,12 +71,13 @@ export default function AnnualBudget() {
   // Budget totals per type per month
   const budgetByTypeMonth = useMemo(() => {
     const result: Record<TransactionType, Record<number, number>> = {
-      income: {}, expense: {}, investment: {}
+      income: {}, expense: {}, investment: {}, savings: {}
     };
     MONTHS.forEach(m => {
       result.income[m] = 0;
       result.expense[m] = 0;
       result.investment[m] = 0;
+      result.savings[m] = 0;
     });
     budgets.forEach(b => {
       if (selectedYear >= b.startYear && selectedYear <= b.endYear) {
@@ -87,7 +91,7 @@ export default function AnnualBudget() {
 
   // Annual totals
   const annualBudget = useMemo(() => {
-    const result: Record<TransactionType, number> = { income: 0, expense: 0, investment: 0 };
+    const result: Record<TransactionType, number> = { income: 0, expense: 0, investment: 0, savings: 0 };
     budgets.forEach(b => {
       if (selectedYear >= b.startYear && selectedYear <= b.endYear) {
         result[b.type] += b.amount * 12;
@@ -97,7 +101,7 @@ export default function AnnualBudget() {
   }, [budgets, selectedYear]);
 
   const annualActual = useMemo(() => {
-    const result: Record<TransactionType, number> = { income: 0, expense: 0, investment: 0 };
+    const result: Record<TransactionType, number> = { income: 0, expense: 0, investment: 0, savings: 0 };
     transactions.filter(t => t.year === selectedYear).forEach(t => {
       result[t.type] += t.amount;
     });
