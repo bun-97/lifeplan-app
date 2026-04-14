@@ -20,14 +20,14 @@ export function getCategoryColor(name: string, index: number): string {
   return MF_CATEGORY_COLORS[name] ?? CHART_COLORS[index % CHART_COLORS.length];
 }
 
-const ChevronIcon = ({ expanded }: { expanded: boolean }) => (
+export const ChevronIcon = ({ expanded }: { expanded: boolean }) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
     className={`w-3 h-3 text-gray-300 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
   </svg>
 );
 
-const ExcludeIcon = ({ excluded }: { excluded: boolean }) => excluded ? (
+export const ExcludeIcon = ({ excluded }: { excluded: boolean }) => excluded ? (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
     <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
   </svg>
@@ -37,7 +37,7 @@ const ExcludeIcon = ({ excluded }: { excluded: boolean }) => excluded ? (
   </svg>
 );
 
-const ReclassifyIcon = () => (
+export const ReclassifyIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-3.5 h-3.5">
     <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
     <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />

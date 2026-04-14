@@ -43,12 +43,15 @@ interface ParsedRow {
   autoClassifiedKeyword?: string;
 }
 
-// 大項目・中項目から種別を判定
-function detectType(bigCat: string, midCat: string, amount: number): TransactionType {
-  if (bigCat === '収入') return 'income';
+// 大項目・中項目・金額の符号から種別を判定
+// - プラス金額 → 収入（大項目が投資系なら投資）
+// - マイナス金額 → 支出（大項目が投資系なら投資）
+function detectType(bigCat: string, midCat: string, rawAmount: number): TransactionType {
   const investWords = ['株式投資', '積立', 'NISA', 'iDeCo', '投資信託', '定期預金', '貯蓄', '投資'];
-  if (investWords.some(w => midCat.includes(w) || bigCat.includes(w))) return 'investment';
-  if (amount > 0) return 'income';
+  const isInvest = investWords.some(w => midCat.includes(w) || bigCat.includes(w));
+  if (isInvest) return 'investment';
+  // 金額の符号で収入/支出を決定（MFはプラス=収入、マイナス=支出）
+  if (rawAmount >= 0) return 'income';
   return 'expense';
 }
 
@@ -106,6 +109,7 @@ function parseData(text: string): ParsedRow[] {
     const rawAmount = parseFloat(amountStr.replace(/,/g, '').replace(/[^\d\-\.]/g, ''));
     if (isNaN(rawAmount)) continue;
 
+    // rawAmountの符号で収入/支出を判別（学習ルールより前に決定）
     let type = detectType(bigCat, midCat, rawAmount);
     let category = detectCategory(type, bigCat, midCat);
     let subcategory = midCat || bigCat || '';
@@ -114,9 +118,17 @@ function parseData(text: string): ParsedRow[] {
     let autoClassifiedKeyword: string | undefined;
 
     // 1. 学習済みルール（正規化・部分一致対応）
+    //    ただし収入↔支出の種別変更は行わない（金額符号ロック）
     const rule = findMatchingRule(content);
     if (rule) {
-      type = rule.type;
+      const isMfIncome = type === 'income';
+      const ruleIsIncome = rule.type === 'income';
+      // 収入はカテゴリ変更のみ（支出への変更禁止）
+      // 支出は支出・投資・貯蓄のみ許可（収入への変更禁止）
+      const allowRuleType = isMfIncome ? ruleIsIncome : !ruleIsIncome;
+      if (allowRuleType) {
+        type = rule.type;
+      }
       category = rule.category;
       subcategory = rule.subcategory;
     } else {

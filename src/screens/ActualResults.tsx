@@ -6,7 +6,7 @@ import MoneyForwardImport from '../components/MoneyForwardImport';
 import { saveCategoryRule, isGenericStoreName } from '../lib/categoryRules';
 import { getMajorCategories, getMinorCategories, getEffectiveTag } from '../lib/categoryConfig';
 import CategorySettings from '../components/CategorySettings';
-import CategorySection, { getCategoryColor } from '../components/actual/CategorySection';
+import CategorySection, { getCategoryColor, ChevronIcon, ExcludeIcon, ReclassifyIcon } from '../components/actual/CategorySection';
 import { fmt } from '../lib/format';
 
 interface FormState {
@@ -51,7 +51,10 @@ export default function ActualResults() {
 
   const totalIncome = useMemo(() => monthlyTx.filter(t => t.type === 'income' && !t.excluded).reduce((s, t) => s + t.amount, 0), [monthlyTx]);
   const totalExpense = useMemo(() => monthlyTx.filter(t => t.type === 'expense' && !t.excluded).reduce((s, t) => s + t.amount, 0), [monthlyTx]);
-  const investmentSavingsTotal = totalIncome - totalExpense;
+  // 投資額 = investmentタイプの合計
+  const totalInvestment = useMemo(() => monthlyTx.filter(t => t.type === 'investment' && !t.excluded).reduce((s, t) => s + t.amount, 0), [monthlyTx]);
+  // 貯蓄 = 収入 - 支出 - 投資（投資・貯蓄は含まない）
+  const totalSavings = totalIncome - totalExpense - totalInvestment;
   // 支出率 = 支出 ÷ 収入（投資・貯蓄は含まない）
   const expenseRate = totalIncome > 0 ? Math.round(totalExpense / totalIncome * 100) : 0;
 
@@ -124,6 +127,15 @@ export default function ActualResults() {
 
   const categorySectionProps = { monthlyTx, expandedGroups, toggleGroup, selectedMonth, openReclassify, updateTransaction };
 
+  // MF取込の種別ロック判定
+  // - MF収入（プラス）→ 収入のみ許可
+  // - MF支出（マイナス）→ 支出・投資・貯蓄のみ許可（収入禁止）
+  function getMfTypeLock(tx: Transaction) {
+    const isMf = tx.source === 'mf' || tx.note === 'MF取込';
+    if (!isMf) return null;
+    return tx.type === 'income' ? 'income-only' : 'no-income';
+  }
+
   return (
     <div className="w-full relative">
 
@@ -156,20 +168,24 @@ export default function ActualResults() {
           </div>
         </div>
 
-        {/* 収入 / 支出 / 投資・貯蓄 */}
-        <div className="grid grid-cols-3 divide-x divide-gray-100">
-          <div className="text-center px-2">
-            <p className="text-xs text-gray-400 mb-0.5">収入</p>
-            <p className="text-sm font-bold text-blue-600 tabular-nums">{fmt(totalIncome)}</p>
+        {/* 収入 / 支出 / 投資 / 貯蓄 */}
+        <div className="grid grid-cols-4 divide-x divide-gray-100">
+          <div className="text-center px-1">
+            <p className="text-[10px] text-gray-400 mb-0.5">収入</p>
+            <p className="text-xs font-bold text-blue-600 tabular-nums">{fmt(totalIncome)}</p>
           </div>
-          <div className="text-center px-2">
-            <p className="text-xs text-gray-400 mb-0.5">支出</p>
-            <p className="text-sm font-bold text-red-500 tabular-nums">{fmt(totalExpense)}</p>
+          <div className="text-center px-1">
+            <p className="text-[10px] text-gray-400 mb-0.5">支出</p>
+            <p className="text-xs font-bold text-red-500 tabular-nums">{fmt(totalExpense)}</p>
           </div>
-          <div className="text-center px-2">
-            <p className="text-xs text-gray-400 mb-0.5">投資・貯蓄</p>
-            <p className={`text-sm font-bold tabular-nums ${investmentSavingsTotal >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-              {investmentSavingsTotal >= 0 ? '+' : ''}{fmt(investmentSavingsTotal)}
+          <div className="text-center px-1">
+            <p className="text-[10px] text-gray-400 mb-0.5">投資</p>
+            <p className="text-xs font-bold text-gray-600 tabular-nums">{fmt(totalInvestment)}</p>
+          </div>
+          <div className="text-center px-1">
+            <p className="text-[10px] text-gray-400 mb-0.5">貯蓄</p>
+            <p className={`text-xs font-bold tabular-nums ${totalSavings >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              {totalSavings >= 0 ? '+' : ''}{fmt(totalSavings)}
             </p>
           </div>
         </div>
@@ -202,28 +218,69 @@ export default function ActualResults() {
                     {investSavPieData.map((item, i) => {
                       const pct = investSavPieTotal > 0 ? Math.round(item.value / investSavPieTotal * 100) : 0;
                       const color = getCategoryColor(item.name, i);
+                      const groupKey = `invest-${item.name}`;
+                      const isExpanded = expandedGroups.has(groupKey);
+                      // このカテゴリに属する明細（除外済み含む・日付降順）
+                      const itemTx = monthlyTx
+                        .filter(t => (t.type === 'investment' || t.type === 'savings') && (t.subcategory || t.itemName) === item.name)
+                        .sort((a, b) => (b.day || 0) - (a.day || 0));
                       return (
-                        <div key={item.name} className="flex items-center pl-1 pr-2 py-2 gap-1.5 border-b border-gray-100">
-                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
-                          <span className="text-xs text-gray-700 flex-1 truncate">{item.name}</span>
-                          <div className="text-right shrink-0 w-16">
-                            <p className="text-xs font-medium text-gray-700 tabular-nums">{fmt(item.value)}</p>
-                            <p className="text-[10px] text-gray-400">{pct}%</p>
-                          </div>
+                        <div key={item.name}>
+                          <button
+                            onClick={() => toggleGroup(groupKey)}
+                            className="w-full flex items-center pl-1 pr-2 py-2 gap-1.5 border-b border-gray-100 hover:bg-gray-50 transition-colors"
+                          >
+                            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+                            <span className="text-xs text-gray-700 flex-1 truncate text-left">{item.name}</span>
+                            <div className="text-right shrink-0 w-14">
+                              <p className="text-xs font-medium text-gray-700 tabular-nums">{fmt(item.value)}</p>
+                              <p className="text-[10px] text-gray-400">{pct}%</p>
+                            </div>
+                            <ChevronIcon expanded={isExpanded} />
+                          </button>
+                          {isExpanded && (
+                            <div className="bg-gray-100 divide-y divide-gray-200">
+                              {itemTx.map(tx => (
+                                <div key={tx.id} className={`flex items-center pl-3 pr-1 py-1.5 gap-1 ${tx.excluded ? 'opacity-40' : ''}`}>
+                                  <div className="flex-1 min-w-0">
+                                    <p className={`text-[10px] text-gray-700 truncate ${tx.excluded ? 'line-through' : ''}`}>{tx.itemName}</p>
+                                    <p className="text-[9px] text-gray-400 tabular-nums">
+                                      {tx.day ? `${selectedMonth}/${tx.day}` : `${selectedMonth}月`} · {fmt(tx.amount)}
+                                    </p>
+                                  </div>
+                                  <button
+                                    onClick={e => { e.stopPropagation(); updateTransaction({ ...tx, excluded: !tx.excluded }); }}
+                                    className={`p-1 shrink-0 ${tx.excluded ? 'text-orange-400' : 'text-gray-300 hover:text-orange-400'}`}
+                                    title={tx.excluded ? '集計に含める' : '集計から除外'}
+                                  >
+                                    <ExcludeIcon excluded={!!tx.excluded} />
+                                  </button>
+                                  <button
+                                    onClick={e => { e.stopPropagation(); openReclassify(tx); }}
+                                    className="text-gray-300 hover:text-indigo-500 p-1 shrink-0"
+                                    title="分類変更"
+                                  >
+                                    <ReclassifyIcon />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
+                    {/* 貯蓄行（収入 - 支出 - 投資の計算値） */}
                     <div className="flex items-center pl-1 pr-2 py-2 gap-1.5">
                       <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-green-500" />
                       <span className="text-xs font-semibold text-gray-700 flex-1">貯蓄</span>
-                      <span className="text-xs font-semibold text-gray-700 tabular-nums w-16 text-right shrink-0">{fmt(investmentSavingsTotal)}</span>
+                      <span className={`text-xs font-semibold tabular-nums w-14 text-right shrink-0 ${totalSavings >= 0 ? 'text-gray-700' : 'text-red-500'}`}>{fmt(totalSavings)}</span>
                     </div>
                   </div>
                 </>
               ) : (
                 <div className="flex flex-col items-center justify-center py-8 text-gray-300 gap-1">
                   <p className="text-xs">収入 − 支出</p>
-                  <p className="text-sm font-semibold text-green-600">{fmt(investmentSavingsTotal)}</p>
+                  <p className="text-sm font-semibold text-green-600">{fmt(totalSavings)}</p>
                 </div>
               )}
             </div>
@@ -373,102 +430,123 @@ export default function ActualResults() {
       )}
 
       {/* ===== RECLASSIFY MODAL ===== */}
-      {reclassify && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
-          <div className="bg-white w-full md:max-w-md rounded-t-2xl md:rounded-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-gray-100">
-              <h2 className="text-base font-semibold text-gray-800">分類を変更</h2>
-              <button onClick={() => setReclassify(null)} className="text-gray-400 hover:text-gray-600">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-            <div className="p-4 space-y-4">
-              <div className="bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-600 flex items-center gap-2">
-                <span className="font-medium flex-1">{reclassify.tx.itemName}</span>
-                <span className="text-xs text-gray-400">{fmt(reclassify.tx.amount)}</span>
-                {(reclassify.tx.source === 'mf' || reclassify.tx.note === 'MF取込') && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500 shrink-0">MF取込</span>
-                )}
+      {reclassify && (() => {
+        const mfLock = getMfTypeLock(reclassify.tx);
+        // ロック判定: mfLock='income-only' → income以外無効, 'no-income' → income無効
+        const isTypeLocked = (t: TransactionType) => {
+          if (!mfLock) return false;
+          if (mfLock === 'income-only') return t !== 'income';
+          if (mfLock === 'no-income') return t === 'income';
+          return false;
+        };
+        return (
+          <div className="fixed inset-0 bg-black/50 z-50 flex items-end md:items-center justify-center p-0 md:p-4">
+            <div className="bg-white w-full md:max-w-md rounded-t-2xl md:rounded-2xl">
+              <div className="flex items-center justify-between p-4 border-b border-gray-100">
+                <h2 className="text-base font-semibold text-gray-800">分類を変更</h2>
+                <button onClick={() => setReclassify(null)} className="text-gray-400 hover:text-gray-600">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">種別</label>
-                {(reclassify.tx.source === 'mf' || reclassify.tx.note === 'MF取込') ? (
-                  // MF取込はカテゴリ変更のみ可・種別変更ロック
-                  <div className="flex gap-2">
-                    {(['income', 'expense', 'investment', 'savings'] as TransactionType[]).map(t => (
-                      <div key={t}
-                        className={`flex-1 py-2 rounded-lg text-sm font-medium border text-center cursor-not-allowed opacity-60 ${reclassify.type === t ? (t === 'income' ? 'bg-blue-500 text-white border-blue-500' : t === 'expense' ? 'bg-red-500 text-white border-red-500' : t === 'savings' ? 'bg-green-600 text-white border-green-600' : 'bg-gray-600 text-white border-gray-600') : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
-                        {typeLabel[t]}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex gap-2">
-                    {(['income', 'expense', 'investment', 'savings'] as TransactionType[]).map(t => (
-                      <button key={t} onClick={() => setReclassify(r => r ? { ...r, type: t, subcategory: '' } : r)}
-                        className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${reclassify.type === t ? (t === 'income' ? 'bg-blue-500 text-white border-blue-500' : t === 'expense' ? 'bg-red-500 text-white border-red-500' : t === 'savings' ? 'bg-green-600 text-white border-green-600' : 'bg-gray-600 text-white border-gray-600') : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'}`}>
-                        {typeLabel[t]}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 mb-1 block">大分類</label>
-                <select
-                  value={reclassify.subcategory}
-                  onChange={e => setReclassify(r => r ? { ...r, subcategory: e.target.value, minorCategory: '' } : r)}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white"
-                >
-                  <option value="">選択してください</option>
-                  {getMajorCategories(reclassify.type).map(node => (
-                    <option key={node.id} value={node.name}>{node.name}</option>
-                  ))}
-                </select>
-              </div>
-              {getMinorCategories(reclassify.type, reclassify.subcategory).length > 0 && (
+              <div className="p-4 space-y-4">
+                <div className="bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-600 flex items-center gap-2">
+                  <span className="font-medium flex-1">{reclassify.tx.itemName}</span>
+                  <span className="text-xs text-gray-400">{fmt(reclassify.tx.amount)}</span>
+                  {(reclassify.tx.source === 'mf' || reclassify.tx.note === 'MF取込') && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-500 shrink-0">MF取込</span>
+                  )}
+                </div>
                 <div>
-                  <label className="text-xs text-gray-500 mb-1 block">中分類</label>
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5">種別</label>
+                  <div className="flex gap-2">
+                    {(['income', 'expense', 'investment', 'savings'] as TransactionType[]).map(t => {
+                      const locked = isTypeLocked(t);
+                      return (
+                        <button
+                          key={t}
+                          onClick={() => !locked && setReclassify(r => r ? { ...r, type: t, subcategory: '' } : r)}
+                          disabled={locked}
+                          className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                            reclassify.type === t
+                              ? (t === 'income' ? 'bg-blue-500 text-white border-blue-500'
+                                : t === 'expense' ? 'bg-red-500 text-white border-red-500'
+                                : t === 'savings' ? 'bg-green-600 text-white border-green-600'
+                                : 'bg-gray-600 text-white border-gray-600')
+                              : locked
+                              ? 'bg-gray-100 text-gray-300 border-gray-200 cursor-not-allowed'
+                              : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                          }`}
+                        >
+                          {typeLabel[t]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {mfLock && (
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      {mfLock === 'income-only'
+                        ? '💡 MF取込の収入はカテゴリのみ変更できます'
+                        : '💡 MF取込の支出は支出・投資・貯蓄に変更できます'}
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">大分類</label>
                   <select
-                    value={reclassify.minorCategory}
-                    onChange={e => setReclassify(r => r ? { ...r, minorCategory: e.target.value } : r)}
+                    value={reclassify.subcategory}
+                    onChange={e => setReclassify(r => r ? { ...r, subcategory: e.target.value, minorCategory: '' } : r)}
                     className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white"
                   >
                     <option value="">選択してください</option>
-                    {getMinorCategories(reclassify.type, reclassify.subcategory).map(sub => (
-                      <option key={sub} value={sub}>{sub}</option>
+                    {getMajorCategories(reclassify.type).map(node => (
+                      <option key={node.id} value={node.name}>{node.name}</option>
                     ))}
                   </select>
                 </div>
-              )}
-              {isGenericStoreName(reclassify.tx.itemName) ? (
-                <div className="flex items-start gap-2 bg-amber-50 rounded-lg px-3 py-2.5">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-amber-500 shrink-0 mt-0.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                  </svg>
-                  <p className="text-xs text-amber-700">「{reclassify.tx.itemName}」は汎用的な名称のため、分類の学習は行いません</p>
-                </div>
-              ) : (
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" checked={applyToAll} onChange={e => setApplyToAll(e.target.checked)} className="rounded text-indigo-600 w-4 h-4" />
+                {getMinorCategories(reclassify.type, reclassify.subcategory).length > 0 && (
                   <div>
-                    <p className="text-sm font-medium text-gray-700">「{reclassify.tx.itemName}」を今後も同じ分類に</p>
-                    <p className="text-xs text-gray-400">同じ店名の取引に一括適用し、次回取込時も自動分類します</p>
+                    <label className="text-xs text-gray-500 mb-1 block">中分類</label>
+                    <select
+                      value={reclassify.minorCategory}
+                      onChange={e => setReclassify(r => r ? { ...r, minorCategory: e.target.value } : r)}
+                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white"
+                    >
+                      <option value="">選択してください</option>
+                      {getMinorCategories(reclassify.type, reclassify.subcategory).map(sub => (
+                        <option key={sub} value={sub}>{sub}</option>
+                      ))}
+                    </select>
                   </div>
-                </label>
-              )}
-              <button onClick={handleReclassify} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-medium hover:bg-indigo-700">
-                変更を保存
-              </button>
-              <div className="text-center pt-1">
-                <button onClick={() => { setReclassify(null); setShowCategorySettings(true); }} className="text-xs text-gray-400 hover:text-indigo-500">
-                  カテゴリを追加・編集はこちら →
+                )}
+                {isGenericStoreName(reclassify.tx.itemName) ? (
+                  <div className="flex items-start gap-2 bg-amber-50 rounded-lg px-3 py-2.5">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-amber-500 shrink-0 mt-0.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                    </svg>
+                    <p className="text-xs text-amber-700">「{reclassify.tx.itemName}」は汎用的な名称のため、分類の学習は行いません</p>
+                  </div>
+                ) : (
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" checked={applyToAll} onChange={e => setApplyToAll(e.target.checked)} className="rounded text-indigo-600 w-4 h-4" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-700">「{reclassify.tx.itemName}」を今後も同じ分類に</p>
+                      <p className="text-xs text-gray-400">同じ店名の取引に一括適用し、次回取込時も自動分類します</p>
+                    </div>
+                  </label>
+                )}
+                <button onClick={handleReclassify} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-medium hover:bg-indigo-700">
+                  変更を保存
                 </button>
+                <div className="text-center pt-1">
+                  <button onClick={() => { setReclassify(null); setShowCategorySettings(true); }} className="text-xs text-gray-400 hover:text-indigo-500">
+                    カテゴリを追加・編集はこちら →
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {showImport && <MoneyForwardImport onClose={() => setShowImport(false)} />}
       {showCategorySettings && <CategorySettings onClose={() => setShowCategorySettings(false)} />}
