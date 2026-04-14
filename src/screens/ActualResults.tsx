@@ -4,8 +4,7 @@ import { useApp } from '../contexts/AppContext';
 import { Transaction, TransactionType } from '../types';
 import MoneyForwardImport from '../components/MoneyForwardImport';
 import { saveCategoryRule } from '../lib/categoryRules';
-import { getMajorCategories, getMinorCategories, getEffectiveTag } from '../lib/categoryConfig';
-import CategorySettings from '../components/CategorySettings';
+import { getMajorCategories, getMinorCategories, getEffectiveTag, getCategoryConfig, saveCategoryConfig } from '../lib/categoryConfig';
 
 const MF_CATEGORY_COLORS: Record<string, string> = {
   '食費': '#E94B3C', '外食': '#E94B3C', '食料品': '#E94B3C',
@@ -24,11 +23,7 @@ function getCategoryColor(name: string, index: number): string {
   return MF_CATEGORY_COLORS[name] ?? CHART_COLORS[index % CHART_COLORS.length];
 }
 
-function fmt(n: number): string { return n.toLocaleString('ja-JP') + '円'; }
-function fmtShort(n: number): string {
-  if (n >= 10000) return (n / 10000).toFixed(1).replace(/\.0$/, '') + '万円';
-  return n.toLocaleString('ja-JP') + '円';
-}
+function fmt(n: number): string { return n.toLocaleString('ja-JP'); }
 
 interface FormState {
   type: TransactionType;
@@ -55,8 +50,13 @@ export default function ActualResults() {
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
   const [showModal, setShowModal] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [showCategorySettings, setShowCategorySettings] = useState(false);
   const [form, setForm] = useState<FormState>(defaultForm);
+  // 新しいカテゴリを追加フォーム
+  const [showAddCatForm, setShowAddCatForm] = useState(false);
+  const [newCatType, setNewCatType] = useState<TransactionType>('expense');
+  const [newMajorName, setNewMajorName] = useState('');
+  const [newMinorName, setNewMinorName] = useState('');
+  const [newExpenseType, setNewExpenseType] = useState<'毎月固定'|'毎月変動'|'不定期固定'|'不定期変動'|''>('');
   const [minorCategory, setMinorCategory] = useState('');
   const [expenseType, setExpenseType] = useState<'毎月固定'|'毎月変動'|'不定期固定'|'不定期変動'|''>('');
   const [budgetType, setBudgetType] = useState<'予算内'|'予算外'|''>('');
@@ -126,6 +126,36 @@ export default function ActualResults() {
     setShowModal(false); setForm(defaultForm); setMinorCategory(''); setExpenseType(''); setBudgetType(''); setMember(''); setEditingId(null);
   }
 
+  function handleAddCategory() {
+    if (!newMajorName.trim()) return;
+    const config = getCategoryConfig();
+    const typeList = config[newCatType];
+    const existing = typeList.find(n => n.name === newMajorName.trim());
+    if (existing) {
+      if (newMinorName.trim() && !existing.subcategories.find(s => s.name === newMinorName.trim())) {
+        existing.subcategories.push({ name: newMinorName.trim(), expenseType: newExpenseType || undefined });
+      }
+    } else {
+      typeList.push({
+        id: `custom-${Date.now()}`,
+        name: newMajorName.trim(),
+        subcategories: newMinorName.trim()
+          ? [{ name: newMinorName.trim(), expenseType: newExpenseType || undefined }]
+          : [],
+        expenseType: newExpenseType || undefined,
+      });
+    }
+    saveCategoryConfig(config);
+    if (reclassify) {
+      setReclassify(r => r ? { ...r, type: newCatType, subcategory: newMajorName.trim(), minorCategory: newMinorName.trim() } : r);
+    } else {
+      setForm(f => ({ ...f, type: newCatType, subcategory: newMajorName.trim() }));
+      setMinorCategory(newMinorName.trim());
+    }
+    setShowAddCatForm(false);
+    setNewMajorName(''); setNewMinorName(''); setNewExpenseType('');
+  }
+
   function openReclassify(tx: Transaction) {
     setReclassify({ tx, type: tx.type, subcategory: tx.subcategory, minorCategory: tx.minorCategory || '' });
     setApplyToAll(false);
@@ -149,9 +179,6 @@ export default function ActualResults() {
 
   return (
     <div className="w-full relative">
-
-      {/* Settings gear button */}
-      <button onClick={() => setShowCategorySettings(true)} className="absolute right-3 top-3 text-gray-400 text-lg z-10">⚙</button>
 
       {/* ===== TOP HEADER SECTION ===== */}
       <div className="bg-white border-b border-gray-100 px-4 pt-4 pb-4">
@@ -187,16 +214,16 @@ export default function ActualResults() {
         <div className="grid grid-cols-3 divide-x divide-gray-100">
           <div className="text-center px-2">
             <p className="text-xs text-gray-400 mb-0.5">収入</p>
-            <p className="text-base font-bold text-blue-600">{fmtShort(totalIncome)}</p>
+            <p className="text-sm font-bold text-blue-600 tabular-nums">{fmt(totalIncome)}</p>
           </div>
           <div className="text-center px-2">
             <p className="text-xs text-gray-400 mb-0.5">支出</p>
-            <p className="text-base font-bold text-red-500">{fmtShort(totalExpense)}</p>
+            <p className="text-sm font-bold text-red-500 tabular-nums">{fmt(totalExpense)}</p>
           </div>
           <div className="text-center px-2">
             <p className="text-xs text-gray-400 mb-0.5">収支</p>
-            <p className={`text-base font-bold ${balance >= 0 ? 'text-gray-800' : 'text-red-500'}`}>
-              {balance >= 0 ? '+' : ''}{fmtShort(balance)}
+            <p className={`text-sm font-bold tabular-nums ${balance >= 0 ? 'text-gray-800' : 'text-red-500'}`}>
+              {balance >= 0 ? '+' : ''}{fmt(balance)}
             </p>
           </div>
         </div>
@@ -226,6 +253,8 @@ export default function ActualResults() {
                     {incomePieData.map((item, i) => {
                       const pct = incomePieTotal > 0 ? Math.round(item.value / incomePieTotal * 100) : 0;
                       const color = getCategoryColor(item.name, i);
+                      const majorKey = `income-${item.name}`;
+                      const majorExpanded = expandedGroups.has(majorKey);
                       const majorTx = monthlyTx.filter(t => t.type === 'income' && (t.subcategory || t.itemName) === item.name);
                       // Group by minor category
                       const minorMap: Record<string, number> = {};
@@ -234,14 +263,17 @@ export default function ActualResults() {
                       return (
                         <div key={item.name}>
                           {/* 大分類行 */}
-                          <div className="w-full flex items-center pl-1 pr-2 py-2 gap-1.5 border-b border-gray-100">
+                          <button onClick={() => toggleGroup(majorKey)} className="w-full flex items-center pl-1 pr-2 py-2 gap-1.5 border-b border-gray-100 hover:bg-gray-50 transition-colors">
                             <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
                             <span className="text-xs font-semibold text-gray-800 flex-1 truncate text-left">{item.name}</span>
-                            <div className="text-right shrink-0">
-                              <p className="text-xs font-medium text-gray-700">{fmt(item.value)}</p>
+                            <div className="text-right shrink-0 w-20">
+                              <p className="text-xs font-medium text-gray-700 tabular-nums">{fmt(item.value)}</p>
                               <p className="text-[10px] text-gray-400">{pct}%</p>
                             </div>
-                          </div>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-3 h-3 text-gray-300 shrink-0 transition-transform ${majorExpanded ? 'rotate-180' : ''}`}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                            </svg>
+                          </button>
                           {/* 中分類・明細（常時表示） */}
                           <div>
                             {minorGroups.map(minor => {
@@ -254,19 +286,19 @@ export default function ActualResults() {
                                   <button onClick={() => toggleGroup(minorKey)} className="w-full flex items-center pl-5 pr-2 py-1.5 gap-1.5 bg-white hover:bg-gray-50 transition-colors">
                                     <span className="text-[9px] shrink-0" style={{ color }}>●</span>
                                     <span className="text-xs text-gray-600 flex-1 truncate text-left">{minor.name}</span>
-                                    <span className="text-xs text-gray-600 shrink-0">{fmt(minor.total)}</span>
+                                    <span className="text-xs text-gray-600 tabular-nums text-right w-20 shrink-0">{fmt(minor.total)}</span>
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-3 h-3 text-gray-300 shrink-0 transition-transform ${minorExpanded ? 'rotate-180' : ''}`}>
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                                     </svg>
                                   </button>
                                   {/* 明細行 */}
-                                  {minorExpanded && (
+                                  {(minorExpanded || majorExpanded) && (
                                     <div className="bg-gray-100 divide-y divide-gray-200">
                                       {minorTx.map(tx => (
                                         <div key={tx.id} className={`flex items-center pl-7 pr-2 py-1.5 gap-1 ${tx.excluded ? 'opacity-40' : ''}`}>
                                           <div className="flex-1 min-w-0">
                                             <p className={`text-xs text-gray-700 truncate ${tx.excluded ? 'line-through' : ''}`}>{tx.itemName}</p>
-                                            <p className="text-[10px] text-gray-400">{selectedMonth}/{tx.day || '?'} · {fmt(tx.amount)}</p>
+                                            <p className="text-[10px] text-gray-400 tabular-nums">{tx.day ? `${selectedMonth}/${tx.day}` : `${selectedMonth}月`} · {fmt(tx.amount)}</p>
                                             <div className="flex gap-1 flex-wrap mt-0.5">
                                               {tx.budgetType && (
                                                 <span className={`text-[10px] px-1 py-0.5 rounded-full ${tx.budgetType === '予算内' ? 'bg-green-50 text-green-600' : 'bg-orange-50 text-orange-600'}`}>{tx.budgetType}</span>
@@ -325,6 +357,8 @@ export default function ActualResults() {
                     {expensePieData.map((item, i) => {
                       const pct = expensePieTotal > 0 ? Math.round(item.value / expensePieTotal * 100) : 0;
                       const color = getCategoryColor(item.name, i);
+                      const majorKey = `expense-${item.name}`;
+                      const majorExpanded = expandedGroups.has(majorKey);
                       const majorTx = monthlyTx.filter(t => t.type === 'expense' && (t.subcategory || t.itemName) === item.name);
                       // Group by minor category
                       const minorMap: Record<string, number> = {};
@@ -333,14 +367,17 @@ export default function ActualResults() {
                       return (
                         <div key={item.name}>
                           {/* 大分類行 */}
-                          <div className="w-full flex items-center pl-1 pr-2 py-2 gap-1.5 border-b border-gray-100">
+                          <button onClick={() => toggleGroup(majorKey)} className="w-full flex items-center pl-1 pr-2 py-2 gap-1.5 border-b border-gray-100 hover:bg-gray-50 transition-colors">
                             <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
                             <span className="text-xs font-semibold text-gray-800 flex-1 truncate text-left">{item.name}</span>
-                            <div className="text-right shrink-0">
-                              <p className="text-xs font-medium text-gray-700">{fmt(item.value)}</p>
+                            <div className="text-right shrink-0 w-20">
+                              <p className="text-xs font-medium text-gray-700 tabular-nums">{fmt(item.value)}</p>
                               <p className="text-[10px] text-gray-400">{pct}%</p>
                             </div>
-                          </div>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-3 h-3 text-gray-300 shrink-0 transition-transform ${majorExpanded ? 'rotate-180' : ''}`}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                            </svg>
+                          </button>
                           {/* 中分類・明細（常時表示） */}
                           <div>
                             {minorGroups.map(minor => {
@@ -353,19 +390,19 @@ export default function ActualResults() {
                                   <button onClick={() => toggleGroup(minorKey)} className="w-full flex items-center pl-5 pr-2 py-1.5 gap-1.5 bg-white hover:bg-gray-50 transition-colors">
                                     <span className="text-[9px] shrink-0" style={{ color }}>●</span>
                                     <span className="text-xs text-gray-600 flex-1 truncate text-left">{minor.name}</span>
-                                    <span className="text-xs text-gray-600 shrink-0">{fmt(minor.total)}</span>
+                                    <span className="text-xs text-gray-600 tabular-nums text-right w-20 shrink-0">{fmt(minor.total)}</span>
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={`w-3 h-3 text-gray-300 shrink-0 transition-transform ${minorExpanded ? 'rotate-180' : ''}`}>
                                       <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                                     </svg>
                                   </button>
                                   {/* 明細行 */}
-                                  {minorExpanded && (
+                                  {(minorExpanded || majorExpanded) && (
                                     <div className="bg-gray-100 divide-y divide-gray-200">
                                       {minorTx.map(tx => (
                                         <div key={tx.id} className={`flex items-center pl-7 pr-2 py-1.5 gap-1 ${tx.excluded ? 'opacity-40' : ''}`}>
                                           <div className="flex-1 min-w-0">
                                             <p className={`text-xs text-gray-700 truncate ${tx.excluded ? 'line-through' : ''}`}>{tx.itemName}</p>
-                                            <p className="text-[10px] text-gray-400">{selectedMonth}/{tx.day || '?'} · {fmt(tx.amount)}</p>
+                                            <p className="text-[10px] text-gray-400 tabular-nums">{tx.day ? `${selectedMonth}/${tx.day}` : `${selectedMonth}月`} · {fmt(tx.amount)}</p>
                                             <div className="flex gap-1 flex-wrap mt-0.5">
                                               {tx.expenseType && (
                                                 <span className="text-[10px] px-1 py-0.5 rounded-full bg-blue-50 text-blue-600">{tx.expenseType}</span>
@@ -463,6 +500,31 @@ export default function ActualResults() {
                     <option key={node.id} value={node.name}>{node.name}</option>
                   ))}
                 </select>
+                <button
+                  onClick={() => { setNewCatType(form.type); setShowAddCatForm(true); }}
+                  className="mt-1.5 text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                  新しいカテゴリを追加
+                </button>
+                {showAddCatForm && !reclassify && (
+                  <div className="mt-2 bg-indigo-50 border border-indigo-100 rounded-xl p-3 space-y-2">
+                    <p className="text-xs font-medium text-indigo-700">新しいカテゴリを追加</p>
+                    <input value={newMajorName} onChange={e => setNewMajorName(e.target.value)} placeholder="大分類名（必須）" className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs" />
+                    <input value={newMinorName} onChange={e => setNewMinorName(e.target.value)} placeholder="中分類名（任意）" className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs" />
+                    <select value={newExpenseType} onChange={e => setNewExpenseType(e.target.value as '毎月固定'|'毎月変動'|'不定期固定'|'不定期変動'|'')} className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white">
+                      <option value="">支出分類（任意）</option>
+                      <option value="毎月固定">毎月固定</option>
+                      <option value="毎月変動">毎月変動</option>
+                      <option value="不定期固定">不定期固定</option>
+                      <option value="不定期変動">不定期変動</option>
+                    </select>
+                    <div className="flex gap-2">
+                      <button onClick={handleAddCategory} className="flex-1 bg-indigo-600 text-white text-xs py-1.5 rounded-lg">追加して選択</button>
+                      <button onClick={() => setShowAddCatForm(false)} className="flex-1 border border-gray-300 text-xs py-1.5 rounded-lg text-gray-600">キャンセル</button>
+                    </div>
+                  </div>
+                )}
               </div>
               {getMinorCategories(form.type, form.subcategory).length > 0 && (
                 <div>
@@ -588,6 +650,31 @@ export default function ActualResults() {
                     <option key={node.id} value={node.name}>{node.name}</option>
                   ))}
                 </select>
+                <button
+                  onClick={() => { setNewCatType(reclassify.type); setShowAddCatForm(true); }}
+                  className="mt-1.5 text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-0.5"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3 h-3"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                  新しいカテゴリを追加
+                </button>
+                {showAddCatForm && (
+                  <div className="mt-2 bg-indigo-50 border border-indigo-100 rounded-xl p-3 space-y-2">
+                    <p className="text-xs font-medium text-indigo-700">新しいカテゴリを追加</p>
+                    <input value={newMajorName} onChange={e => setNewMajorName(e.target.value)} placeholder="大分類名（必須）" className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs" />
+                    <input value={newMinorName} onChange={e => setNewMinorName(e.target.value)} placeholder="中分類名（任意）" className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs" />
+                    <select value={newExpenseType} onChange={e => setNewExpenseType(e.target.value as '毎月固定'|'毎月変動'|'不定期固定'|'不定期変動'|'')} className="w-full border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs bg-white">
+                      <option value="">支出分類（任意）</option>
+                      <option value="毎月固定">毎月固定</option>
+                      <option value="毎月変動">毎月変動</option>
+                      <option value="不定期固定">不定期固定</option>
+                      <option value="不定期変動">不定期変動</option>
+                    </select>
+                    <div className="flex gap-2">
+                      <button onClick={handleAddCategory} className="flex-1 bg-indigo-600 text-white text-xs py-1.5 rounded-lg">追加して選択</button>
+                      <button onClick={() => setShowAddCatForm(false)} className="flex-1 border border-gray-300 text-xs py-1.5 rounded-lg text-gray-600">キャンセル</button>
+                    </div>
+                  </div>
+                )}
               </div>
               {getMinorCategories(reclassify.type, reclassify.subcategory).length > 0 && (
                 <div>
@@ -620,7 +707,6 @@ export default function ActualResults() {
       )}
 
       {showImport && <MoneyForwardImport onClose={() => setShowImport(false)} />}
-      {showCategorySettings && <CategorySettings onClose={() => setShowCategorySettings(false)} />}
     </div>
   );
 }

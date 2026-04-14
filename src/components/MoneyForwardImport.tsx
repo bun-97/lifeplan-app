@@ -94,7 +94,10 @@ function parseData(text: string): ParsedRow[] {
     const midCat = cols[6] || '';
     const isTransfer = cols[8] === '1';
 
-    const dateParts = dateStr.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    // 日付パース: YYYY/MM/DD、YYYY-MM-DD、YYYY年M月D日 に対応
+    let dateParts = dateStr.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    if (!dateParts) dateParts = dateStr.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/);
+    if (!dateParts) dateParts = dateStr.match(/(\d{4})\.(\d{1,2})\.(\d{1,2})/);
     if (!dateParts) continue;
     const year = parseInt(dateParts[1]);
     const month = parseInt(dateParts[2]);
