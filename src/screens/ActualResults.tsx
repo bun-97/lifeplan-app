@@ -64,7 +64,6 @@ export default function ActualResults() {
       .forEach(t => { const k = t.subcategory || t.itemName; map[k] = (map[k] || 0) + t.amount; });
     return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [monthlyTx]);
-  const investSavPieTotal = investSavPieData.reduce((s, d) => s + d.value, 0);
 
   const typeLabel: Record<TransactionType, string> = { income: '収入', expense: '支出', investment: '投資', savings: '貯蓄' };
 
@@ -168,24 +167,20 @@ export default function ActualResults() {
           </div>
         </div>
 
-        {/* 収入 / 支出 / 投資 / 貯蓄 */}
-        <div className="grid grid-cols-4 divide-x divide-gray-100">
-          <div className="text-center px-1">
-            <p className="text-[10px] text-gray-400 mb-0.5">収入</p>
-            <p className="text-xs font-bold text-blue-600 tabular-nums">{fmt(totalIncome)}</p>
+        {/* 収入 / 支出 / 投資貯蓄 */}
+        <div className="grid grid-cols-3 divide-x divide-gray-100">
+          <div className="text-center px-2">
+            <p className="text-xs text-gray-400 mb-0.5">収入</p>
+            <p className="text-sm font-bold text-blue-600 tabular-nums">{fmt(totalIncome)}</p>
           </div>
-          <div className="text-center px-1">
-            <p className="text-[10px] text-gray-400 mb-0.5">支出</p>
-            <p className="text-xs font-bold text-red-500 tabular-nums">{fmt(totalExpense)}</p>
+          <div className="text-center px-2">
+            <p className="text-xs text-gray-400 mb-0.5">支出</p>
+            <p className="text-sm font-bold text-red-500 tabular-nums">{fmt(totalExpense)}</p>
           </div>
-          <div className="text-center px-1">
-            <p className="text-[10px] text-gray-400 mb-0.5">投資</p>
-            <p className="text-xs font-bold text-gray-600 tabular-nums">{fmt(totalInvestment)}</p>
-          </div>
-          <div className="text-center px-1">
-            <p className="text-[10px] text-gray-400 mb-0.5">貯蓄</p>
-            <p className={`text-xs font-bold tabular-nums ${totalSavings >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-              {totalSavings >= 0 ? '+' : ''}{fmt(totalSavings)}
+          <div className="text-center px-2">
+            <p className="text-xs text-gray-400 mb-0.5">投資貯蓄</p>
+            <p className={`text-sm font-bold tabular-nums ${(totalInvestment + totalSavings) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              {(totalInvestment + totalSavings) >= 0 ? '+' : ''}{fmt(totalInvestment + totalSavings)}
             </p>
           </div>
         </div>
@@ -216,7 +211,9 @@ export default function ActualResults() {
                   </ResponsiveContainer>
                   <div className="divide-y divide-gray-50">
                     {investSavPieData.map((item, i) => {
-                      const pct = investSavPieTotal > 0 ? Math.round(item.value / investSavPieTotal * 100) : 0;
+                      // ％は「投資+貯蓄の合計」に対する割合
+                      const grandTotal = totalInvestment + totalSavings;
+                      const pct = grandTotal > 0 ? Math.round(item.value / grandTotal * 100) : 0;
                       const color = getCategoryColor(item.name, i);
                       const groupKey = `invest-${item.name}`;
                       const isExpanded = expandedGroups.has(groupKey);
@@ -270,11 +267,20 @@ export default function ActualResults() {
                       );
                     })}
                     {/* 貯蓄行（収入 - 支出 - 投資の計算値） */}
-                    <div className="flex items-center pl-1 pr-2 py-2 gap-1.5">
-                      <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-green-500" />
-                      <span className="text-xs font-semibold text-gray-700 flex-1">貯蓄</span>
-                      <span className={`text-xs font-semibold tabular-nums w-14 text-right shrink-0 ${totalSavings >= 0 ? 'text-gray-700' : 'text-red-500'}`}>{fmt(totalSavings)}</span>
-                    </div>
+                    {(() => {
+                      const grandTotal = totalInvestment + totalSavings;
+                      const savingsPct = grandTotal > 0 ? Math.round(totalSavings / grandTotal * 100) : 0;
+                      return (
+                        <div className="flex items-center pl-1 pr-2 py-2 gap-1.5">
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-green-500" />
+                          <span className="text-xs font-semibold text-gray-700 flex-1">貯蓄</span>
+                          <div className="text-right shrink-0 w-14">
+                            <p className={`text-xs font-semibold tabular-nums ${totalSavings >= 0 ? 'text-gray-700' : 'text-red-500'}`}>{fmt(totalSavings)}</p>
+                            {grandTotal > 0 && <p className="text-[10px] text-gray-400">{savingsPct}%</p>}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </>
               ) : (
