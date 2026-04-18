@@ -82,15 +82,6 @@ export default function Home() {
   }, [last12Months, transactions]);
 
   const [showRateDetail, setShowRateDetail] = useState(false);
-  const [expandedTypes, setExpandedTypes] = useState<Set<ExpenseType>>(new Set(EXPENSE_TYPES));
-
-  const toggleType = (et: ExpenseType) => {
-    setExpandedTypes(prev => {
-      const next = new Set(prev);
-      if (next.has(et)) next.delete(et); else next.add(et);
-      return next;
-    });
-  };
 
   const monthlyRateDetail = useMemo(() => {
     return last12Months.map(({ year, month }) => {
@@ -187,51 +178,52 @@ export default function Home() {
         </div>
       </div>
 
-      {/* カテゴリ別月平均 */}
+      {/* カテゴリ別月平均 — 2×2グリッド */}
       <p className="text-xs text-gray-400 px-4 pt-5 pb-2">カテゴリ別 月平均支出（直近12か月）</p>
 
-      {EXPENSE_TYPES.map(et => {
-        const cats = avgByTypeAndCategory[et];
-        const subtotal = cats.reduce((s, c) => s + c.avg, 0);
-        const isExpanded = expandedTypes.has(et);
-        return (
-          <div key={et} className="bg-white mt-px">
-            <button
-              onClick={() => toggleType(et)}
-              className="w-full flex items-center px-4 py-3.5 border-b border-gray-100 active:bg-gray-50"
-            >
-              <span className="text-sm font-medium text-gray-700 flex-1 text-left">{et}</span>
-              <span className={`text-sm font-semibold tabular-nums mr-2 ${subtotal > 0 ? 'text-red-500' : 'text-gray-300'}`}>
-                {subtotal > 0 ? fmt(subtotal) : '—'}
-              </span>
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor"
-                className={`w-3.5 h-3.5 text-gray-300 transition-transform shrink-0 ${isExpanded ? 'rotate-180' : ''}`}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-              </svg>
-            </button>
-            {isExpanded && cats.length > 0 && (
+      <div className="px-3 grid grid-cols-2 gap-2">
+        {EXPENSE_TYPES.map(et => {
+          const cats = avgByTypeAndCategory[et];
+          const subtotal = cats.reduce((s, c) => s + c.avg, 0);
+          const SHOW_MAX = 5;
+          const visible = cats.slice(0, SHOW_MAX);
+          const hidden = cats.length - SHOW_MAX;
+          return (
+            <div key={et} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+              {/* セルヘッダー */}
+              <div className="px-3 py-2 border-b border-gray-100">
+                <p className="text-[11px] font-semibold text-gray-500">{et}</p>
+                <p className={`text-sm font-bold tabular-nums ${subtotal > 0 ? 'text-red-500' : 'text-gray-300'}`}>
+                  {subtotal > 0 ? fmt(subtotal) : '—'}
+                </p>
+              </div>
+              {/* カテゴリ行 */}
               <div className="divide-y divide-gray-50">
-                {cats.map((item, i) => (
-                  <div key={item.name} className="flex items-center pl-8 pr-4 py-3 gap-3">
-                    <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: getCategoryColor(item.name, i) }} />
-                    <span className="text-sm text-gray-600 flex-1">{item.name}</span>
-                    <span className="text-sm text-red-400 tabular-nums">{fmt(item.avg)}</span>
+                {visible.length > 0 ? visible.map((item, i) => (
+                  <div key={item.name} className="flex items-center px-3 py-1.5 gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: getCategoryColor(item.name, i) }} />
+                    <span className="text-[11px] text-gray-600 flex-1 truncate">{item.name}</span>
+                    <span className="text-[11px] text-red-400 tabular-nums shrink-0">{fmt(item.avg)}</span>
                   </div>
-                ))}
+                )) : (
+                  <div className="px-3 py-3 text-center">
+                    <span className="text-[10px] text-gray-300">データなし</span>
+                  </div>
+                )}
+                {hidden > 0 && (
+                  <div className="px-3 py-1.5">
+                    <span className="text-[10px] text-gray-300">他{hidden}項目</span>
+                  </div>
+                )}
               </div>
-            )}
-            {isExpanded && cats.length === 0 && (
-              <div className="pl-8 pr-4 py-3">
-                <span className="text-xs text-gray-300">データなし</span>
-              </div>
-            )}
-          </div>
-        );
-      })}
+            </div>
+          );
+        })}
+      </div>
 
       {/* 合計行 */}
       {totalExpenseAvg > 0 && (
-        <div className="bg-white mt-px flex items-center px-4 py-4 border-t border-gray-200">
+        <div className="mx-3 mt-2 bg-white rounded-xl border border-gray-100 flex items-center px-4 py-3">
           <span className="text-sm font-semibold text-gray-700 flex-1">支出合計（月平均）</span>
           <span className="text-sm font-bold text-red-500 tabular-nums">{fmt(totalExpenseAvg)}</span>
         </div>
