@@ -66,8 +66,9 @@ export default function ActualResults() {
   }, [monthlyTx]);
 
   const investSavPieDataFull = useMemo(() => {
-    if (totalSavings <= 0) return investSavPieData;
-    return [...investSavPieData, { name: '貯蓄', value: totalSavings }]
+    const displaySavings = Math.max(0, totalSavings);
+    if (displaySavings <= 0) return investSavPieData;
+    return [...investSavPieData, { name: '貯蓄', value: displaySavings }]
       .sort((a, b) => b.value - a.value);
   }, [investSavPieData, totalSavings]);
 
@@ -138,7 +139,9 @@ export default function ActualResults() {
   function getMfTypeLock(tx: Transaction) {
     const isMf = tx.source === 'mf' || tx.note === 'MF取込';
     if (!isMf) return null;
-    return tx.type === 'income' ? 'income-only' : 'no-income';
+    if (tx.type === 'income') return 'income-only';
+    if (tx.type === 'expense') return 'no-income';
+    return null; // investment/savingsは収入に変更可
   }
 
   return (
@@ -185,8 +188,8 @@ export default function ActualResults() {
           </div>
           <div className="text-center px-2">
             <p className="text-xs text-gray-400 mb-0.5">投資貯蓄</p>
-            <p className={`text-sm font-bold tabular-nums ${(totalInvestment + totalSavings) >= 0 ? 'text-green-600' : 'text-red-500'}`}>
-              {(totalInvestment + totalSavings) >= 0 ? '+' : ''}{fmt(totalInvestment + totalSavings)}
+            <p className={`text-sm font-bold tabular-nums ${totalSavings >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+              {totalSavings >= 0 ? '+' : ''}{fmt(totalSavings)}
             </p>
           </div>
         </div>
@@ -281,8 +284,8 @@ export default function ActualResults() {
                           <div className="w-2.5 h-2.5 rounded-full shrink-0 bg-green-500" />
                           <span className="text-xs font-semibold text-gray-700 flex-1">貯蓄</span>
                           <div className="text-right shrink-0 w-14">
-                            <p className={`text-xs font-semibold tabular-nums ${totalSavings >= 0 ? 'text-gray-700' : 'text-red-500'}`}>{fmt(totalSavings)}</p>
-                            {grandTotal > 0 && <p className="text-[10px] text-gray-400">{savingsPct}%</p>}
+                            <p className="text-xs font-semibold tabular-nums text-gray-700">{fmt(Math.max(0, totalSavings))}</p>
+                            {grandTotal > 0 && totalSavings > 0 && <p className="text-[10px] text-gray-400">{savingsPct}%</p>}
                           </div>
                         </div>
                       );
