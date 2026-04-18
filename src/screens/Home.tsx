@@ -50,6 +50,7 @@ export default function Home() {
 
   const avgByTypeAndCategory = useMemo(() => {
     const catTypeMonthly: Record<string, Record<string, number[]>> = {};
+    let activeMonths = 0;
     for (const { year, month } of last12Months) {
       const monthBucket: Record<string, number> = {};
       transactions
@@ -60,6 +61,7 @@ export default function Home() {
           const key = `${et}::${t.subcategory || 'その他'}`;
           monthBucket[key] = (monthBucket[key] || 0) + t.amount;
         });
+      if (Object.keys(monthBucket).length > 0) activeMonths++;
       for (const [key, amount] of Object.entries(monthBucket)) {
         const [et, cat] = key.split('::');
         if (!catTypeMonthly[et]) catTypeMonthly[et] = {};
@@ -67,6 +69,7 @@ export default function Home() {
         catTypeMonthly[et][cat].push(amount);
       }
     }
+    const divisor = Math.max(1, activeMonths);
     const result: Record<ExpenseType, { name: string; avg: number }[]> = {
       '毎月固定': [], '毎月変動': [], '不定期固定': [], '不定期変動': [],
     };
@@ -74,7 +77,7 @@ export default function Home() {
       const cats = catTypeMonthly[et];
       if (!cats) continue;
       result[et] = Object.entries(cats)
-        .map(([name, amounts]) => ({ name, avg: Math.round(amounts.reduce((a, b) => a + b, 0) / last12Months.length) }))
+        .map(([name, amounts]) => ({ name, avg: Math.round(amounts.reduce((a, b) => a + b, 0) / divisor) }))
         .filter(c => c.avg > 0)
         .sort((a, b) => b.avg - a.avg);
     }
