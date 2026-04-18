@@ -65,6 +65,12 @@ export default function ActualResults() {
     return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [monthlyTx]);
 
+  const investSavPieDataFull = useMemo(() => {
+    if (totalSavings <= 0) return investSavPieData;
+    return [...investSavPieData, { name: '貯蓄', value: totalSavings }]
+      .sort((a, b) => b.value - a.value);
+  }, [investSavPieData, totalSavings]);
+
   const typeLabel: Record<TransactionType, string> = { income: '収入', expense: '支出', investment: '投資', savings: '貯蓄' };
 
   function toggleGroup(key: string) {
@@ -113,7 +119,7 @@ export default function ActualResults() {
     const update = (t: Transaction) => updateTransaction({ ...t, type, category: subcategory, subcategory, minorCategory: minorCategory || undefined });
     update(tx);
     if (applyToAll) {
-      transactions.filter(t => t.itemName === tx.itemName && t.id !== tx.id).forEach(update);
+      transactions.filter(t => t.itemName === tx.itemName && t.id !== tx.id && t.type === tx.type).forEach(update);
       // 汎用名称は学習ルールに保存しない（「内容なし」「不明」などは店名として適さない）
       if (!isGenericStoreName(tx.itemName)) {
         saveCategoryRule(tx.itemName, { type, category: subcategory, subcategory });
@@ -197,12 +203,12 @@ export default function ActualResults() {
             {/* 投資・貯蓄 column */}
             <div className="flex flex-col">
               <p className="text-xs font-medium text-green-600 text-center py-2 border-b border-gray-100">投資・貯蓄</p>
-              {investSavPieData.length > 0 ? (
+              {investSavPieDataFull.length > 0 ? (
                 <>
                   <ResponsiveContainer width="100%" height={110}>
                     <PieChart>
-                      <Pie data={investSavPieData} dataKey="value" cx="50%" cy="50%" innerRadius={22} outerRadius={38}>
-                        {investSavPieData.map((entry, i) => (
+                      <Pie data={investSavPieDataFull} dataKey="value" cx="50%" cy="50%" innerRadius={22} outerRadius={38}>
+                        {investSavPieDataFull.map((entry, i) => (
                           <Cell key={i} fill={getCategoryColor(entry.name, i)} />
                         ))}
                       </Pie>
