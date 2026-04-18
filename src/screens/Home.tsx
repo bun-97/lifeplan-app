@@ -74,7 +74,7 @@ export default function Home() {
       const cats = catTypeMonthly[et];
       if (!cats) continue;
       result[et] = Object.entries(cats)
-        .map(([name, amounts]) => ({ name, avg: Math.round(amounts.reduce((a, b) => a + b, 0) / amounts.length) }))
+        .map(([name, amounts]) => ({ name, avg: Math.round(amounts.reduce((a, b) => a + b, 0) / last12Months.length) }))
         .filter(c => c.avg > 0)
         .sort((a, b) => b.avg - a.avg);
     }
@@ -185,9 +185,8 @@ export default function Home() {
         {EXPENSE_TYPES.map(et => {
           const cats = avgByTypeAndCategory[et];
           const subtotal = cats.reduce((s, c) => s + c.avg, 0);
-          const SHOW_MAX = 5;
-          const visible = cats.slice(0, SHOW_MAX);
-          const hidden = cats.length - SHOW_MAX;
+          const visible = cats;
+          const hidden = 0;
           return (
             <div key={et} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
               {/* セルヘッダー */}
