@@ -54,16 +54,22 @@ function detectType(bigCat: string, midCat: string, rawAmount: number): Transact
   return 'expense';
 }
 
-// 種別からアプリのカテゴリを判定
+// MFの大項目をアプリのカテゴリにマッピング
+const MF_EXPENSE_MAP: Record<string, string> = {
+  '食費': '食費',
+  '日用品': '日用品',
+  '住宅': '住宅',
+  '自動車': '自動車',
+  '交際費': '交際費',
+};
+
 function detectCategory(type: TransactionType, bigCat: string, midCat: string): string {
   if (type === 'income') {
-    const budgetWords = ['給与', '賞与', '年金', '共有'];
-    return budgetWords.some(w => midCat.includes(w) || bigCat.includes(w)) ? '予算内' : '予算外';
+    const regularWords = ['給与', '賞与', '給料'];
+    return regularWords.some(w => midCat.includes(w) || bigCat.includes(w)) ? '収入' : '臨時収入';
   }
-  if (type === 'investment') return '積立投資';
-  const fixedWords = ['家賃', '住宅ローン', 'ローン', '通信費', '保険', 'サブスク', 'NHK', '電気', 'ガス', '水道', '駐車場', '税金'];
-  if (fixedWords.some(w => midCat.includes(w) || bigCat.includes(w))) return '毎月固定費';
-  return '毎月変動費';
+  if (type === 'investment') return '投資';
+  return MF_EXPENSE_MAP[bigCat] ?? 'その他';
 }
 
 function parseData(text: string): ParsedRow[] {
@@ -110,7 +116,7 @@ function parseData(text: string): ParsedRow[] {
     // rawAmountの符号で収入/支出を判別（学習ルールより前に決定）
     let type = detectType(bigCat, midCat, rawAmount);
     let category = detectCategory(type, bigCat, midCat);
-    let subcategory = midCat || bigCat || '';
+    let subcategory = category;
 
     let isAutoClassified = false;
     let autoClassifiedKeyword: string | undefined;
