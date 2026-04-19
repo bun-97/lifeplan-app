@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Profile, Transaction, Budget, LifeEvent, Screen } from '../types';
 import * as storage from '../lib/storage';
+import { resetCategoryConfig as doResetCategoryConfig } from '../lib/categoryConfig';
 import { v4 as uuidv4 } from 'uuid';
 
 interface AppContextType {
@@ -19,6 +20,8 @@ interface AppContextType {
   updateTransaction: (tx: Transaction) => void;
   deleteTransaction: (id: string) => void;
   deleteTransactionsByMonth: (year: number, month: number) => void;
+  deleteAllTransactions: () => void;
+  resetCategoryConfig: () => void;
   addBudget: (budget: Omit<Budget, 'id'>) => void;
   updateBudget: (budget: Budget) => void;
   deleteBudget: (id: string) => void;
@@ -114,6 +117,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTransactions(prev => prev.filter(t => !(t.year === year && t.month === month)));
   }
 
+  function handleDeleteAllTransactions() {
+    if (!currentProfile) return;
+    storage.deleteAllTransactions(currentProfile.id);
+    setTransactions([]);
+  }
+
+  function handleResetCategoryConfig() {
+    doResetCategoryConfig();
+    localStorage.removeItem('lifeplan_category_rules');
+  }
+
   function addBudget(budget: Omit<Budget, 'id'>) {
     const newBudget: Budget = { ...budget, id: uuidv4() };
     storage.saveBudget(newBudget);
@@ -163,6 +177,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateTransaction,
       deleteTransaction: handleDeleteTransaction,
       deleteTransactionsByMonth: handleDeleteTransactionsByMonth,
+      deleteAllTransactions: handleDeleteAllTransactions,
+      resetCategoryConfig: handleResetCategoryConfig,
       addBudget,
       updateBudget,
       deleteBudget: handleDeleteBudget,

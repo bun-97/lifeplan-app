@@ -78,6 +78,12 @@ export function deleteTransactionsByMonth(profileId: string, year: number, month
   saveData(data);
 }
 
+export function deleteAllTransactions(profileId: string): void {
+  const data = loadData();
+  data.transactions = data.transactions.filter(t => t.profileId !== profileId);
+  saveData(data);
+}
+
 // Budget operations
 export function getBudgets(profileId: string): Budget[] {
   return loadData().budgets.filter(b => b.profileId === profileId);

@@ -75,4 +75,4 @@ export interface AppData {
   lifeEvents: LifeEvent[];
 }
 
-export type Screen = 'home' | 'actual' | 'budget-plan' | 'annual-budget' | 'life-plan';
+export type Screen = 'home' | 'actual' | 'budget-plan' | 'annual-budget' | 'life-plan' | 'settings';

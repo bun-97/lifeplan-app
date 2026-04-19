@@ -95,7 +95,8 @@ export default function Home() {
           const key = `${et}::${t.subcategory || 'その他'}`;
           bucket[key] = (bucket[key] || 0) + t.amount;
         });
-      if (Object.keys(bucket).length > 0) activeMonths++;
+      const isCurrentMonth = year === currentYear && month === currentMonth;
+      if (Object.keys(bucket).length > 0 && !isCurrentMonth) activeMonths++;
       for (const [key, amount] of Object.entries(bucket)) {
         const [et, cat] = key.split('::');
         if (!catMonthly[et]) catMonthly[et] = {};
@@ -133,7 +134,8 @@ export default function Home() {
           const key = `${bt}::${t.subcategory || 'その他'}`;
           bucket[key] = (bucket[key] || 0) + t.amount;
         });
-      if (Object.keys(bucket).length > 0) activeMonths++;
+      const isCurrentMonth = year === currentYear && month === currentMonth;
+      if (Object.keys(bucket).length > 0 && !isCurrentMonth) activeMonths++;
       for (const [key, amount] of Object.entries(bucket)) {
         const [bt, cat] = key.split('::');
         if (!catMonthly[bt]) catMonthly[bt] = {};

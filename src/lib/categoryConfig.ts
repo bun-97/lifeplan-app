@@ -25,39 +25,26 @@ const STORAGE_KEY = 'lifeplan_category_config';
 
 const DEFAULT_CONFIG: CategoryConfig = {
   income: [
-    { id: 'inc-1', name: '収入', subcategories: [{ name: '給与', budgetType: '予算内' }, { name: '賞与', budgetType: '予算外' }], budgetType: '予算内' },
-    { id: 'inc-2', name: '配当金', subcategories: [], budgetType: '予算外' },
-    { id: 'inc-3', name: '副業', subcategories: [], budgetType: '予算外' },
-    { id: 'inc-4', name: '賞与', subcategories: [], budgetType: '予算外' },
-    { id: 'inc-5', name: '臨時収入', subcategories: [], budgetType: '予算外' },
+    { id: 'inc-1', name: '収入', subcategories: [], budgetType: '予算内' },
+    { id: 'inc-2', name: '臨時収入', subcategories: [], budgetType: '予算外' },
   ],
   expense: [
-    { id: 'exp-1', name: '食費', subcategories: [{ name: '外食', expenseType: '不定期変動' }, { name: '食料品', expenseType: '毎月変動' }], expenseType: '毎月変動' },
+    { id: 'exp-1', name: '食費', subcategories: [], expenseType: '毎月変動' },
     { id: 'exp-2', name: '日用品', subcategories: [], expenseType: '毎月変動' },
-    { id: 'exp-3', name: '住宅', subcategories: [{ name: '家賃', expenseType: '毎月固定' }, { name: '住宅ローン', expenseType: '毎月固定' }, { name: '管理費', expenseType: '毎月固定' }], expenseType: '毎月固定' },
-    { id: 'exp-4', name: '通信費', subcategories: [{ name: 'スマホ', expenseType: '毎月固定' }, { name: 'ネット', expenseType: '毎月固定' }], expenseType: '毎月固定' },
-    { id: 'exp-5', name: '保険', subcategories: [{ name: '生命保険', expenseType: '毎月固定' }, { name: '医療保険', expenseType: '毎月固定' }, { name: '火災保険', expenseType: '不定期固定' }], expenseType: '毎月固定' },
-    { id: 'exp-6', name: '教養・教育', subcategories: [], expenseType: '毎月固定' },
-    { id: 'exp-7', name: '水道光熱費', subcategories: [{ name: '電気', expenseType: '毎月固定' }, { name: 'ガス', expenseType: '毎月固定' }, { name: '水道', expenseType: '毎月固定' }], expenseType: '毎月固定' },
-    { id: 'exp-8', name: '自動車', subcategories: [{ name: 'ガソリン', expenseType: '毎月変動' }, { name: '駐車場', expenseType: '毎月固定' }, { name: '自動車保険', expenseType: '不定期固定' }], expenseType: '毎月固定' },
-    { id: 'exp-9', name: '交際費', subcategories: [], expenseType: '不定期変動' },
-    { id: 'exp-10', name: '衣服・美容', subcategories: [], expenseType: '不定期変動' },
-    { id: 'exp-11', name: '健康・医療', subcategories: [], expenseType: '不定期変動' },
-    { id: 'exp-12', name: 'サブスク費', subcategories: [], expenseType: '不定期固定' },
-    { id: 'exp-13', name: '税・社会保障', subcategories: [], expenseType: '不定期固定' },
-    { id: 'exp-14', name: 'その他', subcategories: [], expenseType: '不定期変動' },
+    { id: 'exp-3', name: '住宅', subcategories: [], expenseType: '毎月固定' },
+    { id: 'exp-4', name: '自動車', subcategories: [], expenseType: '毎月固定' },
+    { id: 'exp-5', name: '交際費', subcategories: [], expenseType: '不定期変動' },
+    { id: 'exp-6', name: 'その他', subcategories: [], expenseType: '不定期変動' },
   ],
   investment: [
-    { id: 'inv-1', name: '株式投資', subcategories: [] },
-    { id: 'inv-2', name: 'NISA', subcategories: [{ name: 'つみたてNISA' }, { name: '成長投資枠' }] },
-    { id: 'inv-3', name: 'iDeCo', subcategories: [] },
+    { id: 'inv-1', name: '投資', subcategories: [] },
   ],
-  savings: [
-    { id: 'sav-1', name: '貯金', subcategories: [] },
-    { id: 'sav-2', name: '積立', subcategories: [{ name: '定期積立' }, { name: '財形貯蓄' }] },
-    { id: 'sav-3', name: '定期預金', subcategories: [] },
-  ],
+  savings: [],
 };
+
+export function resetCategoryConfig(): void {
+  localStorage.removeItem(STORAGE_KEY);
+}
 
 function migrateConfig(raw: any): CategoryConfig {
   const migrateNodes = (nodes: any[]): CategoryNode[] =>

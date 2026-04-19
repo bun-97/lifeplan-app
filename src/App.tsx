@@ -8,6 +8,7 @@ import ActualResults from './screens/ActualResults';
 import BudgetPlan from './screens/BudgetPlan';
 import AnnualBudget from './screens/AnnualBudget';
 import LifePlan from './screens/LifePlan';
+import Settings from './screens/Settings';
 
 function AppContent() {
   const { currentProfile, currentScreen, createProfile } = useApp();
@@ -76,6 +77,7 @@ function AppContent() {
             {currentScreen === 'budget-plan' && '予算計画'}
             {currentScreen === 'annual-budget' && '年間予算'}
             {currentScreen === 'life-plan' && 'ライフプランシート'}
+            {currentScreen === 'settings' && '設定'}
           </h1>
           <div className="flex items-center gap-2">
             {/* データ同期ボタン */}
@@ -102,6 +104,7 @@ function AppContent() {
         {currentScreen === 'budget-plan' && <BudgetPlan />}
         {currentScreen === 'annual-budget' && <AnnualBudget />}
         {currentScreen === 'life-plan' && <LifePlan />}
+        {currentScreen === 'settings' && <Settings />}
       </main>
 
       {showSync && (
