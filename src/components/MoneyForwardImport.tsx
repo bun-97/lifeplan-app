@@ -31,6 +31,9 @@ interface ParsedRow {
   type: TransactionType;
   category: string;
   subcategory: string;
+  minorCategory: string;
+  expenseType?: '毎月固定' | '毎月変動' | '不定期固定' | '不定期変動';
+  budgetType?: '予算内' | '予算外';
   selected: boolean;
   isExcluded: boolean;
   isDuplicate: boolean;
@@ -54,13 +57,15 @@ function detectType(bigCat: string, midCat: string, rawAmount: number): Transact
   return 'expense';
 }
 
-// MFの大項目をアプリのカテゴリにマッピング
-const MF_EXPENSE_MAP: Record<string, string> = {
-  '食費': '食費',
-  '日用品': '日用品',
-  '住宅': '住宅',
-  '自動車': '自動車',
-  '交際費': '交際費',
+const MF_APP_EXPENSE_CATS = new Set(['食費', '日用品', '住宅', '自動車', '交際費']);
+
+const EXPENSE_TYPE_MAP: Record<string, '毎月固定' | '毎月変動' | '不定期固定' | '不定期変動'> = {
+  '食費': '毎月変動',
+  '日用品': '毎月変動',
+  '住宅': '毎月固定',
+  '自動車': '毎月固定',
+  '交際費': '不定期変動',
+  'その他': '不定期変動',
 };
 
 function detectCategory(type: TransactionType, bigCat: string, midCat: string): string {
@@ -69,7 +74,7 @@ function detectCategory(type: TransactionType, bigCat: string, midCat: string): 
     return regularWords.some(w => midCat.includes(w) || bigCat.includes(w)) ? '収入' : '臨時収入';
   }
   if (type === 'investment') return '投資';
-  return MF_EXPENSE_MAP[bigCat] ?? 'その他';
+  return MF_APP_EXPENSE_CATS.has(bigCat) ? bigCat : 'その他';
 }
 
 function parseData(text: string): ParsedRow[] {
@@ -117,6 +122,9 @@ function parseData(text: string): ParsedRow[] {
     let type = detectType(bigCat, midCat, rawAmount);
     let category = detectCategory(type, bigCat, midCat);
     let subcategory = category;
+    const minorCategory = midCat || '';
+    const expenseType = type === 'expense' ? EXPENSE_TYPE_MAP[category] : undefined;
+    const budgetType = type === 'income' ? (category === '収入' ? '予算内' : '予算外') as '予算内' | '予算外' : undefined;
 
     let isAutoClassified = false;
     let autoClassifiedKeyword: string | undefined;
@@ -156,6 +164,9 @@ function parseData(text: string): ParsedRow[] {
       type,
       category,
       subcategory,
+      minorCategory,
+      expenseType,
+      budgetType,
       selected: calcTarget === '1',
       isExcluded: calcTarget === '0',
       isDuplicate: false,
@@ -294,6 +305,9 @@ export default function MoneyForwardImport({ onClose }: Props) {
         type: row.type,
         category: row.category,
         subcategory: row.subcategory,
+        minorCategory: row.minorCategory || undefined,
+        expenseType: row.expenseType,
+        budgetType: row.budgetType,
         itemName: row.content,
         amount: row.amount,
         note: 'MF取込',
