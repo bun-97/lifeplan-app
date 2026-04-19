@@ -57,7 +57,18 @@ function detectType(bigCat: string, midCat: string, rawAmount: number): Transact
   return 'expense';
 }
 
-const MF_APP_EXPENSE_CATS = new Set(['食費', '日用品', '住宅', '自動車', '交際費']);
+// MF大項目 → アプリ6カテゴリのマッピング（登録外はその他）
+const MF_TO_APP_CAT: Record<string, string> = {
+  '食費': '食費',
+  '日用品': '日用品',
+  '住宅': '住宅',
+  '自動車': '自動車',
+  '交際費': '交際費',
+  '通信費': '住宅',
+  '保険': '住宅',
+  '光熱費': '住宅',
+  '教育・教養': '日用品',
+};
 
 const EXPENSE_TYPE_MAP: Record<string, '毎月固定' | '毎月変動' | '不定期固定' | '不定期変動'> = {
   '食費': '毎月変動',
@@ -74,7 +85,7 @@ function detectCategory(type: TransactionType, bigCat: string, midCat: string): 
     return regularWords.some(w => midCat.includes(w) || bigCat.includes(w)) ? '収入' : '臨時収入';
   }
   if (type === 'investment') return '投資';
-  return MF_APP_EXPENSE_CATS.has(bigCat) ? bigCat : 'その他';
+  return MF_TO_APP_CAT[bigCat] ?? 'その他';
 }
 
 function parseData(text: string): ParsedRow[] {

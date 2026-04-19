@@ -62,7 +62,7 @@ export default function ActualResults() {
   const investSavPieData = useMemo(() => {
     const map: Record<string, number> = {};
     monthlyTx.filter(t => (t.type === 'investment' || t.type === 'savings') && !t.excluded)
-      .forEach(t => { const k = t.subcategory || t.itemName; map[k] = (map[k] || 0) + t.amount; });
+      .forEach(t => { const k = t.minorCategory || t.subcategory || t.itemName; map[k] = (map[k] || 0) + t.amount; });
     return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
   }, [monthlyTx]);
 
@@ -240,7 +240,7 @@ export default function ActualResults() {
                       const isExpanded = expandedGroups.has(groupKey);
                       // このカテゴリに属する明細（除外済み含む・日付降順）
                       const itemTx = monthlyTx
-                        .filter(t => (t.type === 'investment' || t.type === 'savings') && (t.subcategory || t.itemName) === item.name)
+                        .filter(t => (t.type === 'investment' || t.type === 'savings') && (t.minorCategory || t.subcategory || t.itemName) === item.name)
                         .sort((a, b) => (b.day || 0) - (a.day || 0));
                       return (
                         <div key={item.name}>
