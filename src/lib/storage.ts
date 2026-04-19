@@ -82,6 +82,7 @@ export function deleteAllTransactions(profileId: string): void {
   const data = loadData();
   data.transactions = data.transactions.filter(t => t.profileId !== profileId);
   saveData(data);
+  localStorage.removeItem('lifeplan_import_history');
 }
 
 // Budget operations

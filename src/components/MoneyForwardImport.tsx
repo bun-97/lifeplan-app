@@ -32,7 +32,6 @@ interface ParsedRow {
   category: string;
   subcategory: string;
   selected: boolean;
-  isTransfer: boolean;
   isExcluded: boolean;
   isDuplicate: boolean;
   isNearDuplicate: boolean;
@@ -95,7 +94,6 @@ function parseData(text: string): ParsedRow[] {
     const amountStr = cols[3];
     const bigCat = cols[5] || '';
     const midCat = cols[6] || '';
-    const isTransfer = cols[8] === '1';
 
     // 日付パース: YYYY/MM/DD、YYYY-MM-DD、YYYY年M月D日 に対応
     let dateParts = dateStr.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
@@ -152,8 +150,7 @@ function parseData(text: string): ParsedRow[] {
       type,
       category,
       subcategory,
-      selected: calcTarget === '1' && !isTransfer,
-      isTransfer,
+      selected: calcTarget === '1',
       isExcluded: calcTarget === '0',
       isDuplicate: false,
       isNearDuplicate: false,
@@ -167,7 +164,6 @@ function parseData(text: string): ParsedRow[] {
 }
 
 function detectDuplicates(rows: ParsedRow[], existing: Transaction[]): ParsedRow[] {
-  const transferWords = ['振替', '口座振替', '引き落とし'];
   return rows.map(row => {
     const exactMatch = existing.find(t =>
       t.year === row.year && t.month === row.month && t.day === row.day &&
@@ -185,8 +181,7 @@ function detectDuplicates(rows: ParsedRow[], existing: Transaction[]): ParsedRow
       return { ...row, isNearDuplicate: true, nearDuplicateInfo: `既存: ${nearMatch.itemName}`, userExcludeDecision: undefined };
     }
 
-    const autoExclude = transferWords.some(w => row.subcategory.includes(w) || row.category.includes(w));
-    return { ...row, autoExcluded: autoExclude };
+    return row;
   });
 }
 
@@ -201,7 +196,6 @@ export default function MoneyForwardImport({ onClose }: Props) {
   const [rows, setRows] = useState<ParsedRow[]>([]);
   const [importing, setImporting] = useState(false);
   const [done, setDone] = useState(false);
-  const [showAll, setShowAll] = useState(false);
   const [showHistoryWarning, setShowHistoryWarning] = useState(false);
   const [historyWarningText, setHistoryWarningText] = useState('');
   const [parsedPeriod, setParsedPeriod] = useState<{ start: string; end: string } | null>(null);
@@ -338,9 +332,9 @@ export default function MoneyForwardImport({ onClose }: Props) {
     savings: 'text-teal-600'
   };
 
-  const displayRows = showAll ? rows : rows.filter(r => !r.isTransfer && !r.isExcluded && !r.isDuplicate);
+  const displayRows = rows.filter(r => !r.isDuplicate);
   const selectedCount = rows.filter(r => r.selected).length;
-  const hiddenCount = rows.filter(r => r.isTransfer || r.isExcluded).length;
+  const excludedCount = rows.filter(r => r.isExcluded).length;
   const duplicateCount = rows.filter(r => r.isDuplicate).length;
   const nearDupRows = rows.filter(r => r.isNearDuplicate);
 
@@ -429,13 +423,8 @@ export default function MoneyForwardImport({ onClose }: Props) {
 
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-xs text-amber-800 space-y-1">
                 <p>⚠️ 収入・支出・投資の分類は自動推定です。取込後に個別修正できます。</p>
-                {hiddenCount > 0 && (
-                  <p>
-                    振替・計算対象外の{hiddenCount}件は非選択にしています。
-                    <button onClick={() => setShowAll(!showAll)} className="ml-1 underline">
-                      {showAll ? '隠す' : '表示する'}
-                    </button>
-                  </p>
+                {excludedCount > 0 && (
+                  <p>マネフォで「計算対象外」の{excludedCount}件はチェックを外しています。必要であれば選択できます。</p>
                 )}
               </div>
 
@@ -501,7 +490,6 @@ export default function MoneyForwardImport({ onClose }: Props) {
                             {TYPE_LABEL[row.type]}
                           </span>
                           <span className="text-xs text-gray-400">{row.date}</span>
-                          {row.isTransfer && <span className="text-xs text-gray-400 bg-gray-100 px-1 rounded">振替</span>}
                           {row.isExcluded && <span className="text-xs text-gray-400 bg-gray-100 px-1 rounded">計算対象外</span>}
                           {row.autoExcluded && <span className="text-xs text-orange-500 bg-orange-50 px-1 rounded">集計対象外</span>}
                         </div>
