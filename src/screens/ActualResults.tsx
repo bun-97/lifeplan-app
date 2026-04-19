@@ -26,12 +26,13 @@ interface ReclassifyState {
 }
 
 export default function ActualResults() {
-  const { currentProfile, transactions, addTransaction, updateTransaction } = useApp();
+  const { currentProfile, transactions, addTransaction, updateTransaction, deleteTransactionsByMonth } = useApp();
   const members = currentProfile?.members ?? [];
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(now.getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(now.getMonth() + 1);
   const [showModal, setShowModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showCategorySettings, setShowCategorySettings] = useState(false);
   const [form, setForm] = useState<FormState>(defaultForm);
@@ -158,6 +159,17 @@ export default function ActualResults() {
           <div className="flex-1 text-center font-semibold text-lg text-gray-800">
             {selectedYear}年{selectedMonth}月
           </div>
+          {monthlyTx.length > 0 && (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="p-2 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-400 transition-colors"
+              title="この月のデータを一括削除"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+              </svg>
+            </button>
+          )}
           <button onClick={nextMonth} className="p-2 rounded-lg hover:bg-gray-100 text-gray-600">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
@@ -565,6 +577,46 @@ export default function ActualResults() {
 
       {showImport && <MoneyForwardImport onClose={() => setShowImport(false)} />}
       {showCategorySettings && <CategorySettings onClose={() => setShowCategorySettings(false)} />}
+
+      {/* ===== 月次一括削除 確認モーダル ===== */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-2xl overflow-hidden">
+            <div className="p-5">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-red-500">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">{selectedYear}年{selectedMonth}月のデータを削除</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{monthlyTx.length}件の取引が削除されます</p>
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2">この操作は元に戻せません。</p>
+            </div>
+            <div className="flex border-t border-gray-100">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 py-3.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
+              >
+                キャンセル
+              </button>
+              <div className="w-px bg-gray-100" />
+              <button
+                onClick={() => {
+                  deleteTransactionsByMonth(selectedYear, selectedMonth);
+                  setShowDeleteConfirm(false);
+                }}
+                className="flex-1 py-3.5 text-sm font-semibold text-red-500 hover:bg-red-50"
+              >
+                削除する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

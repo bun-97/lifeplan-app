@@ -18,6 +18,7 @@ interface AppContextType {
   addTransaction: (tx: Omit<Transaction, 'id' | 'createdAt'>) => void;
   updateTransaction: (tx: Transaction) => void;
   deleteTransaction: (id: string) => void;
+  deleteTransactionsByMonth: (year: number, month: number) => void;
   addBudget: (budget: Omit<Budget, 'id'>) => void;
   updateBudget: (budget: Budget) => void;
   deleteBudget: (id: string) => void;
@@ -107,6 +108,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTransactions(prev => prev.filter(t => t.id !== id));
   }
 
+  function handleDeleteTransactionsByMonth(year: number, month: number) {
+    if (!currentProfile) return;
+    storage.deleteTransactionsByMonth(currentProfile.id, year, month);
+    setTransactions(prev => prev.filter(t => !(t.year === year && t.month === month)));
+  }
+
   function addBudget(budget: Omit<Budget, 'id'>) {
     const newBudget: Budget = { ...budget, id: uuidv4() };
     storage.saveBudget(newBudget);
@@ -155,6 +162,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addTransaction,
       updateTransaction,
       deleteTransaction: handleDeleteTransaction,
+      deleteTransactionsByMonth: handleDeleteTransactionsByMonth,
       addBudget,
       updateBudget,
       deleteBudget: handleDeleteBudget,
