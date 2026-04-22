@@ -73,7 +73,10 @@ export default function Home() {
     });
   }, [last12Months, transactions]);
 
-  const monthsWithRate = monthlyStats.filter(m => m.income > 0);
+  const monthsWithRate = monthlyStats.filter((m, i) => {
+    const { year, month } = last12Months[i];
+    return m.income > 0 && !(year === currentYear && month === currentMonth);
+  });
   const avgRate = monthsWithRate.length > 0
     ? Math.round(monthsWithRate.reduce((s, m) => s + m.rate, 0) / monthsWithRate.length) : null;
 

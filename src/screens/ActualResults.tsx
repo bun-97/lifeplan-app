@@ -118,7 +118,13 @@ export default function ActualResults() {
   function handleReclassify() {
     if (!reclassify) return;
     const { tx, type, subcategory, minorCategory } = reclassify;
-    const update = (t: Transaction) => updateTransaction({ ...t, type, category: subcategory, subcategory, minorCategory: minorCategory || undefined });
+    const tags = getEffectiveTag(type, subcategory, minorCategory || undefined);
+    const update = (t: Transaction) => updateTransaction({
+      ...t, type, category: subcategory, subcategory,
+      minorCategory: minorCategory || undefined,
+      expenseType: (tags.expenseType as Transaction['expenseType']) || undefined,
+      budgetType: (tags.budgetType as Transaction['budgetType']) || undefined,
+    });
     update(tx);
     if (applyToAll) {
       transactions.filter(t => t.itemName === tx.itemName && t.id !== tx.id && t.type === tx.type).forEach(update);
@@ -530,21 +536,16 @@ export default function ActualResults() {
                     ))}
                   </select>
                 </div>
-                {getMinorCategories(reclassify.type, reclassify.subcategory).length > 0 && (
-                  <div>
-                    <label className="text-xs text-gray-500 mb-1 block">中分類</label>
-                    <select
-                      value={reclassify.minorCategory}
-                      onChange={e => setReclassify(r => r ? { ...r, minorCategory: e.target.value } : r)}
-                      className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white"
-                    >
-                      <option value="">選択してください</option>
-                      {getMinorCategories(reclassify.type, reclassify.subcategory).map(sub => (
-                        <option key={sub} value={sub}>{sub}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                <div>
+                  <label className="text-xs text-gray-500 mb-1 block">中分類（任意）</label>
+                  <input
+                    type="text"
+                    value={reclassify.minorCategory}
+                    onChange={e => setReclassify(r => r ? { ...r, minorCategory: e.target.value } : r)}
+                    placeholder="例：ローン返済、サブスク、食費"
+                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-white"
+                  />
+                </div>
                 {isGenericStoreName(reclassify.tx.itemName) ? (
                   <div className="flex items-start gap-2 bg-amber-50 rounded-lg px-3 py-2.5">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-amber-500 shrink-0 mt-0.5">

@@ -526,7 +526,7 @@ export default function MoneyForwardImport({ onClose }: Props) {
                         </div>
                         <p className="text-sm font-medium text-gray-800 truncate">{row.content}</p>
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="text-xs text-gray-500">{row.category} ／ {row.subcategory}</p>
+                          <p className="text-xs text-gray-500">{row.category}{row.minorCategory ? ` ／ ${row.minorCategory}` : ''}</p>
                           {row.isAutoClassified && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-600 font-medium border border-violet-100">
                               ✨ AI提案
